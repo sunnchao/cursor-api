@@ -45,7 +45,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5.6.1
         with:
-          images: ${{ env.IMAGE_NAME }}
+          images: sunchaowang/cursor-api
           tags: |
             type=raw,value=latest,enable=${{ github.event_name == 'workflow_dispatch' && inputs.update_latest }}
             type=raw,value=${{ steps.cargo_version.outputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
