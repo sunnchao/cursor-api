@@ -18,7 +18,7 @@ use crate::{
     common::{
         client::build_client,
         models::{error::ChatError, userinfo::MembershipType, ErrorResponse},
-        utils::{format_time_ms, get_token_profile, validate_token_and_checksum},
+        utils::{format_time_ms, generate_checksum_with_repair, get_token_profile, validate_token_and_checksum},
     },
 };
 use axum::{
@@ -243,7 +243,7 @@ pub async fn handle_chat(
     };
 
     // 构建请求客户端
-    let client = build_client(&auth_token, &checksum);
+    let client = build_client(&auth_token, &generate_checksum_with_repair(&checksum));
     let response = client.body(hex_data).send().await;
 
     // 处理请求结果
