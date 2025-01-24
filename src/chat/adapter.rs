@@ -1,23 +1,31 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use image::guess_format;
 use prost::Message as _;
+use reqwest::Client;
 use uuid::Uuid;
 
-use crate::app::{
-    constant::EMPTY_STRING,
-    lazy::DEFAULT_INSTRUCTIONS,
-    model::{AppConfig, VisionAbility},
+use crate::{
+    app::{
+        constant::EMPTY_STRING,
+        lazy::DEFAULT_INSTRUCTIONS,
+        model::{AppConfig, VisionAbility},
+    },
+    common::client::HTTP_CLIENT,
 };
 
 use super::{
     aiserver::v1::{
-        conversation_message, image_proto, AzureState, ConversationMessage, ExplicitContext, GetChatRequest, ImageProto, ModelDetails
+        conversation_message, image_proto, AzureState, ConversationMessage, ExplicitContext,
+        GetChatRequest, ImageProto, ModelDetails,
     },
     constant::{ERR_UNSUPPORTED_GIF, ERR_UNSUPPORTED_IMAGE_FORMAT, LONG_CONTEXT_MODELS},
     model::{Message, MessageContent, Role},
 };
 
-async fn process_chat_inputs(inputs: Vec<Message>) -> (String, Vec<ConversationMessage>) {
+async fn process_chat_inputs(
+    inputs: Vec<Message>,
+    disable_vision: bool,
+) -> (String, Vec<ConversationMessage>) {
     // 收集 system 指令
     let instructions = inputs
         .iter()
@@ -155,15 +163,19 @@ async fn process_chat_inputs(inputs: Vec<Message>) -> (String, Vec<ConversationM
                             }
                         }
                         "image_url" => {
-                            if let Some(image_url) = &content.image_url {
-                                let url = image_url.url.clone();
-                                let result =
-                                    tokio::spawn(async move { fetch_image_data(&url).await });
-                                if let Ok(Ok((image_data, dimensions))) = result.await {
-                                    images.push(ImageProto {
-                                        data: image_data,
-                                        dimension: dimensions,
+                            if !disable_vision {
+                                if let Some(image_url) = &content.image_url {
+                                    let url = image_url.url.clone();
+                                    let client = HTTP_CLIENT.read().clone();
+                                    let result = tokio::spawn(async move {
+                                        fetch_image_data(&url, client).await
                                     });
+                                    if let Ok(Ok((image_data, dimensions))) = result.await {
+                                        images.push(ImageProto {
+                                            data: image_data,
+                                            dimension: dimensions,
+                                        });
+                                    }
                                 }
                             }
                         }
@@ -219,6 +231,7 @@ async fn process_chat_inputs(inputs: Vec<Message>) -> (String, Vec<ConversationM
 
 async fn fetch_image_data(
     url: &str,
+    client: Client,
 ) -> Result<(Vec<u8>, Option<image_proto::Dimension>), Box<dyn std::error::Error + Send + Sync>> {
     // 在进入异步操作前获取并释放锁
     let vision_ability = AppConfig::get_vision_ability();
@@ -237,7 +250,7 @@ async fn fetch_image_data(
             if url.starts_with("data:image/") {
                 process_base64_image(url)
             } else {
-                process_http_image(url).await
+                process_http_image(url, client).await
             }
         }
     }
@@ -290,8 +303,9 @@ fn process_base64_image(
 // 处理 HTTP 图片 URL
 async fn process_http_image(
     url: &str,
+    client: Client,
 ) -> Result<(Vec<u8>, Option<image_proto::Dimension>), Box<dyn std::error::Error + Send + Sync>> {
-    let response = reqwest::get(url).await?;
+    let response = client.get(url).send().await?;
     let image_data = response.bytes().await?.to_vec();
     let format = guess_format(&image_data)?;
 
@@ -328,17 +342,19 @@ async fn process_http_image(
 pub async fn encode_chat_message(
     inputs: Vec<Message>,
     model_name: &str,
+    disable_vision: bool,
+    enable_slow_pool: bool,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
     // 在进入异步操作前获取并释放锁
     let enable_slow_pool = {
-        if AppConfig::get_slow_pool() {
+        if enable_slow_pool {
             Some(true)
         } else {
             None
         }
     };
 
-    let (instructions, messages) = process_chat_inputs(inputs).await;
+    let (instructions, messages) = process_chat_inputs(inputs, disable_vision).await;
 
     let explicit_context = if !instructions.trim().is_empty() {
         Some(ExplicitContext {

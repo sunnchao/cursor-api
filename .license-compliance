@@ -1,0 +1,16 @@
+# 合规使用指南
+attribution_rules:
+  required_disclaimer: 
+    text: "基于第三方技术构建，与原始开发者无关联"
+    placement: 
+      - documentation
+      - marketing_materials
+      - about_sections
+  prohibited_actions:
+    - using_author_name_in_press_releases
+    - claiming_official_support
+    - using_project_logo_as_endorsement
+
+enforcement:
+  grace_period: 72h
+  compliance_check: https://api.wisdgod.com/license/validate

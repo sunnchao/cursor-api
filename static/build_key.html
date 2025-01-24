@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/x-icon" href="data:image/x-icon;,">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Key 构建</title>
+  <!-- 引入共享样式 -->
+  <link rel="stylesheet" href="/static/shared-styles.css">
+  <script src="/static/shared.js"></script>
+  <style>
+    .key-result {
+      word-break: break-all;
+      background: var(--card-background);
+      padding: var(--spacing);
+      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+      margin-top: var(--spacing);
+      position: relative;
+    }
+
+    .copy-button {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      padding: 4px 8px;
+      font-size: 14px;
+      background: var(--primary-color-alpha);
+      color: var(--primary-color);
+      border: 1px solid var(--primary-color);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .copy-button:hover {
+      background: var(--primary-color);
+      color: white;
+    }
+
+    .model-list {
+      max-height: 150px;
+      overflow-y: auto;
+      padding: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      margin-top: 8px;
+      background: var(--card-background);
+    }
+
+    .model-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .model-item input[type="checkbox"] {
+      margin-right: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Key 构建</h1>
+
+  <div class="container">
+    <div class="form-group">
+      <label>服务认证令牌:</label>
+      <input type="password" id="authToken" placeholder="输入服务认证令牌">
+    </div>
+
+    <div class="form-group">
+      <label>数据认证令牌:</label>
+      <input type="password" id="dataToken" placeholder="输入数据认证令牌">
+    </div>
+
+    <div class="form-group">
+      <label>流第一个块检查:</label>
+      <select id="enableStreamCheck">
+        <option value="">跟随全局</option>
+        <option value="true">启用</option>
+        <option value="false">禁用</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>包含停止流:</label>
+      <select id="includeStopStream">
+        <option value="">跟随全局</option>
+        <option value="true">启用</option>
+        <option value="false">禁用</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>图片处理能力:</label>
+      <select id="disableVision">
+        <option value="">跟随全局</option>
+        <option value="true">禁用</option>
+        <option value="false">启用</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>慢速池:</label>
+      <select id="enableSlowPool">
+        <option value="">跟随全局</option>
+        <option value="true">启用</option>
+        <option value="false">禁用</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>使用量检查模型规则:</label>
+      <select id="usageCheckType" onchange="toggleModelList()">
+        <option value="">跟随全局</option>
+        <option value="default">默认</option>
+        <option value="disabled">禁用</option>
+        <option value="all">所有</option>
+        <option value="custom">自定义</option>
+      </select>
+      <div id="modelListContainer" class="model-list" style="display: none;">
+        <!-- 模型列表将通过 JavaScript 动态填充 -->
+      </div>
+    </div>
+
+    <div class="button-group">
+      <button onclick="buildKey()">构建 Key</button>
+      <button onclick="clearForm()" class="secondary">清空表单</button>
+    </div>
+  </div>
+
+  <div id="keyResult" class="key-result" style="display: none;">
+    <button class="copy-button" onclick="copyKey()">复制</button>
+    <div id="keyContent"></div>
+  </div>
+
+  <div id="message"></div>
+
+  <script>
+    let availableModels = [];
+
+    async function getModels() {
+      try {
+        const response = await fetch('/v1/models');
+        const data = await response.json();
+        availableModels = data.data.map(model => model.id);
+        updateModelList();
+      } catch (error) {
+        showGlobalMessage('获取模型列表失败', true);
+      }
+    }
+
+    function updateModelList() {
+      const container = document.getElementById('modelListContainer');
+      container.innerHTML = availableModels.map(model => `<div class="model-item"><input type="checkbox" id="model_${model}" value="${model}"><label for="model_${model}">${model}</label></div>`).join('');
+    }
+
+    function toggleModelList() {
+      const type = document.getElementById('usageCheckType').value;
+      const container = document.getElementById('modelListContainer');
+      container.style.display = type === 'custom' ? 'block' : 'none';
+    }
+
+    async function buildKey() {
+      const authToken = document.getElementById('authToken').value;
+      const dataToken = document.getElementById('dataToken').value;
+
+      if (!authToken) {
+        showGlobalMessage('请输入服务认证令牌', true);
+        return;
+      }
+
+      if (!dataToken) {
+        showGlobalMessage('请输入数据认证令牌', true);
+        return;
+      }
+
+      const type = document.getElementById('usageCheckType').value;
+      let modelIds = '';
+      if (type === 'custom') {
+        modelIds = Array.from(document.querySelectorAll('#modelListContainer input:checked'))
+          .map(input => input.value)
+          .join(',');
+      }
+
+      const data = {
+        auth_token: dataToken,
+        enable_stream_check: parseBooleanFromString(document.getElementById('enableStreamCheck').value, undefined),
+        include_stop_stream: parseBooleanFromString(document.getElementById('includeStopStream').value, undefined),
+        disable_vision: parseBooleanFromString(document.getElementById('disableVision').value, undefined),
+        enable_slow_pool: parseBooleanFromString(document.getElementById('enableSlowPool').value, undefined),
+        usage_check_models: type ? {
+          type: type,
+          model_ids: type === 'custom' ? modelIds : undefined
+        } : undefined
+      };
+
+      try {
+        const response = await makeAuthenticatedRequest('/build-key', {
+          method: 'POST',
+          body: JSON.stringify(data)
+        });
+
+        if (response) {
+          const keyResult = document.getElementById('keyResult');
+          const keyContent = document.getElementById('keyContent');
+          keyContent.textContent = response.key || response.error;
+          keyResult.style.display = 'block';
+          showGlobalMessage(response.key ? 'Key 构建成功' : '构建失败: ' + response.error, !response.key);
+        }
+      } catch (error) {
+        showGlobalMessage('请求失败: ' + error.message, true);
+      }
+    }
+
+    function copyKey() {
+      const keyContent = document.getElementById('keyContent').textContent;
+      navigator.clipboard.writeText(keyContent).then(() => {
+        showGlobalMessage('Key 已复制到剪贴板');
+      }).catch(() => {
+        showGlobalMessage('复制失败', true);
+      });
+    }
+
+    function clearForm() {
+      document.getElementById('authToken').value = '';
+      document.getElementById('dataToken').value = '';
+      document.getElementById('enableStreamCheck').value = '';
+      document.getElementById('includeStopStream').value = '';
+      document.getElementById('disableVision').value = '';
+      document.getElementById('enableSlowPool').value = '';
+      document.getElementById('usageCheckType').value = 'default';
+      document.getElementById('modelListContainer').style.display = 'none';
+      document.getElementById('keyResult').style.display = 'none';
+      showGlobalMessage('表单已清空');
+    }
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', () => {
+      getModels();
+      const authToken = getAuthToken();
+      if (authToken) {
+        document.getElementById('authToken').value = authToken;
+        fetchLogs();
+      }
+    });
+    initializeTokenHandling('authToken');
+  </script>
+</body>
+
+</html>

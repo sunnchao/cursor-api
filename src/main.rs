@@ -5,7 +5,12 @@ mod common;
 use app::{
     config::handle_config_update,
     constant::{
-        EMPTY_STRING, PKG_VERSION, ROUTE_ABOUT_PATH, ROUTE_API_PATH, ROUTE_BASIC_CALIBRATION_PATH, ROUTE_CONFIG_PATH, ROUTE_ENV_EXAMPLE_PATH, ROUTE_GET_CHECKSUM, ROUTE_GET_HASH, ROUTE_GET_TIMESTAMP_HEADER, ROUTE_GET_TOKENINFO_PATH, ROUTE_HEALTH_PATH, ROUTE_LOGS_PATH, ROUTE_README_PATH, ROUTE_ROOT_PATH, ROUTE_STATIC_PATH, ROUTE_TOKENINFO_PATH, ROUTE_UPDATE_TOKENINFO_PATH, ROUTE_USER_INFO_PATH
+        PKG_VERSION, ROUTE_ABOUT_PATH, ROUTE_API_PATH, ROUTE_BASIC_CALIBRATION_PATH,
+        ROUTE_BUILD_KEY_PATH, ROUTE_CONFIG_PATH, ROUTE_ENV_EXAMPLE_PATH, ROUTE_GET_CHECKSUM,
+        ROUTE_GET_HASH, ROUTE_GET_TIMESTAMP_HEADER, ROUTE_HEALTH_PATH, ROUTE_LOGS_PATH,
+        ROUTE_README_PATH, ROUTE_ROOT_PATH, ROUTE_STATIC_PATH, ROUTE_TOKENS_ADD_PATH,
+        ROUTE_TOKENS_DELETE_PATH, ROUTE_TOKENS_GET_PATH, ROUTE_TOKENS_PATH,
+        ROUTE_TOKENS_RELOAD_PATH, ROUTE_TOKENS_UPDATE_PATH, ROUTE_USER_INFO_PATH,
     },
     lazy::{AUTH_TOKEN, ROUTE_CHAT_PATH, ROUTE_MODELS_PATH},
     model::*,
@@ -16,13 +21,16 @@ use axum::{
 };
 use chat::{
     route::{
-        handle_about, handle_api_page, handle_basic_calibration, handle_config_page, handle_env_example, handle_get_checksum, handle_get_hash, handle_get_timestamp_header, handle_get_tokeninfo, handle_health, handle_logs, handle_logs_post, handle_readme, handle_root, handle_static, handle_tokeninfo_page, handle_update_tokeninfo, handle_update_tokeninfo_post, handle_user_info
+        handle_about, handle_add_tokens, handle_api_page, handle_basic_calibration,
+        handle_build_key, handle_build_key_page, handle_config_page, handle_delete_tokens,
+        handle_env_example, handle_get_checksum, handle_get_hash, handle_get_timestamp_header,
+        handle_get_tokens, handle_health, handle_logs, handle_logs_post, handle_readme,
+        handle_reload_tokens, handle_root, handle_static, handle_tokens_page, handle_update_tokens,
+        handle_user_info,
     },
     service::{handle_chat, handle_models},
 };
-use common::utils::{
-    load_tokens, parse_bool_from_env, parse_string_from_env, parse_usize_from_env,
-};
+use common::utils::{load_tokens, parse_string_from_env, parse_usize_from_env};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tower_http::{cors::CorsLayer, limit::RequestBodyLimitLayer};
@@ -47,13 +55,7 @@ async fn main() {
     };
 
     // 初始化全局配置
-    AppConfig::init(
-        parse_bool_from_env("ENABLE_STREAM_CHECK", true),
-        parse_bool_from_env("INCLUDE_STOP_REASON_STREAM", true),
-        VisionAbility::from_str(&parse_string_from_env("VISION_ABILITY", EMPTY_STRING)),
-        parse_bool_from_env("ENABLE_SLOW_POOL", false),
-        parse_bool_from_env("PASS_ANY_CLAUDE", false),
-    );
+    AppConfig::init();
 
     // 加载 tokens
     let token_infos = load_tokens();
@@ -61,18 +63,42 @@ async fn main() {
     // 初始化应用状态
     let state = Arc::new(Mutex::new(AppState::new(token_infos)));
 
+    // 创建一个克隆用于后台任务
+    let state_for_reload = state.clone();
+
+    // 启动后台任务在每个整1000秒时更新 checksum
+    tokio::spawn(async move {
+        loop {
+            // 获取当前时间戳
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // 计算距离下一个整1000秒的等待时间
+            let next_reload = (now / 1000 + 1) * 1000;
+            let wait_duration = next_reload - now;
+
+            // 等待到下一个整1000秒
+            tokio::time::sleep(std::time::Duration::from_secs(wait_duration)).await;
+
+            let mut app_state = state_for_reload.lock().await;
+            app_state.update_checksum();
+            debug_println!("checksum 自动刷新: {}", next_reload);
+        }
+    });
+
     // 设置路由
     let app = Router::new()
         .route(ROUTE_ROOT_PATH, get(handle_root))
         .route(ROUTE_HEALTH_PATH, get(handle_health))
-        .route(ROUTE_TOKENINFO_PATH, get(handle_tokeninfo_page))
+        .route(ROUTE_TOKENS_PATH, get(handle_tokens_page))
         .route(ROUTE_MODELS_PATH.as_str(), get(handle_models))
-        .route(ROUTE_UPDATE_TOKENINFO_PATH, get(handle_update_tokeninfo))
-        .route(ROUTE_GET_TOKENINFO_PATH, post(handle_get_tokeninfo))
-        .route(
-            ROUTE_UPDATE_TOKENINFO_PATH,
-            post(handle_update_tokeninfo_post),
-        )
+        .route(ROUTE_TOKENS_GET_PATH, post(handle_get_tokens))
+        .route(ROUTE_TOKENS_RELOAD_PATH, post(handle_reload_tokens))
+        .route(ROUTE_TOKENS_UPDATE_PATH, post(handle_update_tokens))
+        .route(ROUTE_TOKENS_ADD_PATH, post(handle_add_tokens))
+        .route(ROUTE_TOKENS_DELETE_PATH, post(handle_delete_tokens))
         .route(ROUTE_CHAT_PATH.as_str(), post(handle_chat))
         .route(ROUTE_LOGS_PATH, get(handle_logs))
         .route(ROUTE_LOGS_PATH, post(handle_logs_post))
@@ -88,6 +114,8 @@ async fn main() {
         .route(ROUTE_GET_TIMESTAMP_HEADER, get(handle_get_timestamp_header))
         .route(ROUTE_BASIC_CALIBRATION_PATH, post(handle_basic_calibration))
         .route(ROUTE_USER_INFO_PATH, post(handle_user_info))
+        .route(ROUTE_BUILD_KEY_PATH, get(handle_build_key_page))
+        .route(ROUTE_BUILD_KEY_PATH, post(handle_build_key))
         .layer(RequestBodyLimitLayer::new(
             1024 * 1024 * parse_usize_from_env("REQUEST_BODY_LIMIT_MB", 2),
         ))
@@ -99,6 +127,9 @@ async fn main() {
     let addr = format!("0.0.0.0:{}", port);
     println!("服务器运行在端口 {}", port);
     println!("当前版本: v{}", PKG_VERSION);
+    // if PKG_VERSION.contains("pre") {
+    println!("当前是测试版，有问题及时反馈哦~");
+    // }
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();

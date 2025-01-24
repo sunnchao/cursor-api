@@ -1,12 +1,61 @@
-use crate::chat::constant::AVAILABLE_MODELS;
+use crate::{
+    app::constant::{COMMA, COMMA_STRING},
+    chat::{config::key_config, constant::AVAILABLE_MODELS},
+};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum UsageCheck {
     None,
     Default,
     All,
     Custom(Vec<&'static str>),
+}
+
+impl UsageCheck {
+    pub fn from_proto(model: Option<&key_config::UsageCheckModel>) -> Option<Self> {
+        model.map(|model| {
+            use key_config::usage_check_model::Type;
+            match Type::try_from(model.r#type).unwrap_or(Type::Default) {
+                Type::Default | Type::Disabled => Self::None,
+                Type::All => Self::All,
+                Type::Custom => {
+                    let models: Vec<&'static str> = model
+                        .model_ids
+                        .iter()
+                        .filter_map(|id| AVAILABLE_MODELS.iter().find(|m| m.id == id).map(|m| m.id))
+                        .collect();
+                    if models.is_empty() {
+                        Self::None
+                    } else {
+                        Self::Custom(models)
+                    }
+                }
+            }
+        })
+    }
+
+    // pub fn to_proto(&self) -> key_config::UsageCheckModel {
+    //     use key_config::usage_check_model::Type;
+    //     match self {
+    //         Self::None => key_config::UsageCheckModel {
+    //             r#type: Type::Disabled.into(),
+    //             model_ids: vec![],
+    //         },
+    //         Self::Default => key_config::UsageCheckModel {
+    //             r#type: Type::Default.into(),
+    //             model_ids: vec![],
+    //         },
+    //         Self::All => key_config::UsageCheckModel {
+    //             r#type: Type::All.into(),
+    //             model_ids: vec![],
+    //         },
+    //         Self::Custom(models) => key_config::UsageCheckModel {
+    //             r#type: Type::Custom.into(),
+    //             model_ids: models.iter().map(|&s| s.to_string()).collect(),
+    //         },
+    //     }
+    // }
 }
 
 impl Default for UsageCheck {
@@ -34,7 +83,7 @@ impl Serialize for UsageCheck {
             }
             UsageCheck::Custom(models) => {
                 state.serialize_field("type", "list")?;
-                state.serialize_field("content", &models.join(","))?;
+                state.serialize_field("content", &models.join(COMMA_STRING))?;
             }
         }
         state.end()
@@ -70,7 +119,7 @@ impl<'de> Deserialize<'de> for UsageCheck {
                 }
 
                 let models: Vec<&'static str> = list
-                    .split(',')
+                    .split(COMMA)
                     .filter_map(|model| {
                         let model = model.trim();
                         AVAILABLE_MODELS
@@ -87,5 +136,36 @@ impl<'de> Deserialize<'de> for UsageCheck {
                 }
             }
         })
+    }
+}
+
+impl UsageCheck {
+    pub fn from_str(s: &str) -> Self {
+        match s.trim().to_lowercase().as_str() {
+            "none" | "disabled" => Self::None,
+            "default" => Self::Default,
+            "all" | "everything" => Self::All,
+            list => {
+                if list.is_empty() {
+                    return Self::default();
+                }
+                let models: Vec<&'static str> = list
+                    .split(COMMA)
+                    .filter_map(|model| {
+                        let model = model.trim();
+                        AVAILABLE_MODELS
+                            .iter()
+                            .find(|m| m.id == model)
+                            .map(|m| m.id)
+                    })
+                    .collect();
+
+                if models.is_empty() {
+                    Self::default()
+                } else {
+                    Self::Custom(models)
+                }
+            }
+        }
     }
 }

@@ -90,8 +90,8 @@ use crate::app::model::{AppConfig, UsageCheck};
 use super::constant::USAGE_CHECK_MODELS;
 
 impl Model {
-    pub fn is_usage_check(&self) -> bool {
-        match AppConfig::get_usage_check() {
+    pub fn is_usage_check(&self, usage_check: Option<UsageCheck>) -> bool {
+        match usage_check.unwrap_or(AppConfig::get_usage_check()) {
             UsageCheck::None => false,
             UsageCheck::Default => USAGE_CHECK_MODELS.contains(&self.id),
             UsageCheck::All => true,

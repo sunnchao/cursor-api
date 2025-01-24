@@ -3,6 +3,7 @@
 const { minify: minifyHtml } = require('html-minifier-terser');
 const { minify: minifyJs } = require('terser');
 const CleanCSS = require('clean-css');
+const MarkdownIt = require('markdown-it');
 const fs = require('fs');
 const path = require('path');
 
@@ -28,9 +29,74 @@ const cssOptions = {
 // 处理文件
 async function minifyFile(inputPath, outputPath) {
   try {
-    const ext = path.extname(inputPath).toLowerCase();
-    const content = fs.readFileSync(inputPath, 'utf8');
+    let ext = path.extname(inputPath).toLowerCase();
+    if (ext === '.md') ext = '.html';
+    const filename = path.basename(inputPath);
+    let content = fs.readFileSync(inputPath, 'utf8');
     let minified;
+
+    // 特殊处理 readme.html
+    if (filename.toLowerCase() === 'readme.md') {
+      const md = new MarkdownIt({
+        html: true,
+        linkify: true,
+        typographer: true
+      });
+      const readmeMdPath = path.join(__dirname, '..', 'README.md');
+      const markdownContent = fs.readFileSync(readmeMdPath, 'utf8');
+      // 添加基本的 markdown 样式
+      const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>README</title>
+    <style>
+        body {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+        }
+        pre {
+            background-color: #f6f8fa;
+            padding: 16px;
+            border-radius: 6px;
+            overflow: auto;
+        }
+        code {
+            background-color: #f6f8fa;
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+        }
+        img {
+            max-width: 100%;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        table td, table th {
+            border: 1px solid #dfe2e5;
+            padding: 6px 13px;
+        }
+        blockquote {
+            border-left: 4px solid #dfe2e5;
+            margin: 0;
+            padding: 0 1em;
+            color: #6a737d;
+        }
+    </style>
+</head>
+<body>
+    ${md.render(markdownContent)}
+</body>
+</html>
+      `;
+      content = htmlContent;
+    }
 
     switch (ext) {
       case '.html':
@@ -68,12 +134,22 @@ async function main() {
   const staticDir = path.join(__dirname, '..', 'static');
 
   for (const file of files) {
-    const inputPath = path.join(staticDir, file);
-    const ext = path.extname(file);
-    const outputPath = path.join(
-      staticDir,
-      file.replace(ext, `.min${ext}`)
-    );
+    // 特殊处理 README.md 的输入路径
+    let inputPath;
+    let outputPath;
+
+    if (file.toLowerCase() === 'readme.md') {
+      inputPath = path.join(__dirname, '..', 'README.md');
+      outputPath = path.join(staticDir, 'readme.min.html');
+    } else {
+      inputPath = path.join(staticDir, file);
+      const ext = path.extname(file);
+      outputPath = path.join(
+        staticDir,
+        file.replace(ext, `.min${ext}`)
+      );
+    }
+
     await minifyFile(inputPath, outputPath);
   }
 }

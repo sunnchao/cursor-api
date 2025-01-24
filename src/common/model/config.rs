@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::app::model::{PageContent, UsageCheck, VisionAbility};
+use crate::app::model::{PageContent, UsageCheck, VisionAbility, Proxies};
 
 #[derive(Serialize)]
 pub struct ConfigData {
@@ -10,27 +10,26 @@ pub struct ConfigData {
     pub vision_ability: VisionAbility,
     pub enable_slow_pool: bool,
     pub enable_all_claude: bool,
-    pub check_usage_models: UsageCheck,
+    pub usage_check_models: UsageCheck,
+    pub enable_dynamic_key: bool,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub share_token: String,
+    pub proxies: Proxies,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
+#[serde(default)]
 pub struct ConfigUpdateRequest {
-    #[serde(default)]
     pub action: String, // "get", "update", "reset"
-    #[serde(default)]
     pub path: String,
-    #[serde(default)]
     pub content: Option<PageContent>, // "default", "text", "html"
-    #[serde(default)]
     pub enable_stream_check: Option<bool>,
-    #[serde(default)]
     pub include_stop_stream: Option<bool>,
-    #[serde(default)]
     pub vision_ability: Option<VisionAbility>,
-    #[serde(default)]
     pub enable_slow_pool: Option<bool>,
-    #[serde(default)]
     pub enable_all_claude: Option<bool>,
-    #[serde(default)]
-    pub check_usage_models: Option<UsageCheck>,
+    pub usage_check_models: Option<UsageCheck>,
+    pub enable_dynamic_key: Option<bool>,
+    pub share_token: Option<String>,
+    pub proxies: Option<Proxies>,
 }

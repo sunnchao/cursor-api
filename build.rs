@@ -1,13 +1,21 @@
+#[cfg(not(any(feature = "use-minified")))]
 use sha2::{Digest, Sha256};
+#[cfg(not(any(feature = "use-minified")))]
 use std::collections::HashMap;
+#[cfg(not(any(feature = "use-minified")))]
 use std::fs;
 use std::io::Result;
-use std::path::{Path, PathBuf};
+#[cfg(not(any(feature = "use-minified")))]
+use std::path::Path;
+use std::path::PathBuf;
+#[cfg(not(any(feature = "use-minified")))]
 use std::process::Command;
 
 // 支持的文件类型
-const SUPPORTED_EXTENSIONS: [&str; 3] = ["html", "js", "css"];
+#[cfg(not(any(feature = "use-minified")))]
+const SUPPORTED_EXTENSIONS: [&str; 4] = ["html", "js", "css", "md"];
 
+#[cfg(not(any(feature = "use-minified")))]
 fn check_and_install_deps() -> Result<()> {
     let scripts_dir = Path::new("scripts");
     let node_modules = scripts_dir.join("node_modules");
@@ -27,9 +35,20 @@ fn check_and_install_deps() -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(any(feature = "use-minified")))]
 fn get_files_hash() -> Result<HashMap<PathBuf, String>> {
     let mut file_hashes = HashMap::new();
     let static_dir = Path::new("static");
+
+    // 首先处理 README.md
+    let readme_path = Path::new("README.md");
+    if readme_path.exists() {
+        let content = fs::read(readme_path)?;
+        let mut hasher = Sha256::new();
+        hasher.update(&content);
+        let hash = format!("{:x}", hasher.finalize());
+        file_hashes.insert(readme_path.to_path_buf(), hash);
+    }
 
     if static_dir.exists() {
         for entry in fs::read_dir(static_dir)? {
@@ -53,6 +72,7 @@ fn get_files_hash() -> Result<HashMap<PathBuf, String>> {
     Ok(file_hashes)
 }
 
+#[cfg(not(any(feature = "use-minified")))]
 fn load_saved_hashes() -> Result<HashMap<PathBuf, String>> {
     let hash_file = Path::new("scripts/.asset-hashes.json");
     if hash_file.exists() {
@@ -67,6 +87,7 @@ fn load_saved_hashes() -> Result<HashMap<PathBuf, String>> {
     }
 }
 
+#[cfg(not(any(feature = "use-minified")))]
 fn save_hashes(hashes: &HashMap<PathBuf, String>) -> Result<()> {
     let hash_file = Path::new("scripts/.asset-hashes.json");
     let string_map: HashMap<String, String> = hashes
@@ -78,6 +99,7 @@ fn save_hashes(hashes: &HashMap<PathBuf, String>) -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(any(feature = "use-minified")))]
 fn minify_assets() -> Result<()> {
     // 获取现有文件的哈希
     let current_hashes = get_files_hash()?;
@@ -94,14 +116,21 @@ fn minify_assets() -> Result<()> {
     let files_to_update: Vec<_> = current_hashes
         .iter()
         .filter(|(path, current_hash)| {
+            let is_readme = path.file_name().map_or(false, |f| f == "README.md");
             let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-            let min_path = path.with_file_name(format!(
-                "{}.min.{}",
-                path.file_stem().unwrap().to_string_lossy(),
-                ext
-            ));
 
-            // 检查压缩后的文件是否存在
+            // 为 README.md 和其他文件使用不同的输出路径检查
+            let min_path = if is_readme {
+                PathBuf::from("static/readme.min.html")
+            } else {
+                path.with_file_name(format!(
+                    "{}.min.{}",
+                    path.file_stem().unwrap().to_string_lossy(),
+                    ext
+                ))
+            };
+
+            // 检查压缩/转换后的文件是否存在
             if !min_path.exists() {
                 return true;
             }
@@ -140,26 +169,52 @@ fn minify_assets() -> Result<()> {
 fn main() -> Result<()> {
     // Proto 文件处理
     println!("cargo:rerun-if-changed=src/chat/aiserver/v1/lite.proto");
+    println!("cargo:rerun-if-changed=src/chat/config/key.proto");
+    // 获取环境变量 PROTOC
+    let protoc_path = match std::env::var_os("PROTOC") {
+        Some(path) => PathBuf::from(path),
+        None => {
+            println!("cargo:warning=PROTOC environment variable not set, using default protoc.");
+            // 如果 PROTOC 未设置，则返回一个空的 PathBuf，prost-build 会尝试使用默认的 protoc
+            PathBuf::new()
+        }
+    };
     let mut config = prost_build::Config::new();
+    // 如果 protoc_path 不为空，则配置使用指定的 protoc
+    if !protoc_path.as_os_str().is_empty() {
+        config.protoc_executable(protoc_path);
+    }
     // config.type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]");
-    // config.type_attribute(
-    //     "aiserver.v1.ThrowErrorCheckRequest",
-    //     "#[derive(serde::Serialize, serde::Deserialize)]"
-    // );
     config
-        .compile_protos(&["src/chat/aiserver/v1/lite.proto"], &["src/chat/aiserver/v1/"])
+        .compile_protos(
+            &["src/chat/aiserver/v1/lite.proto"],
+            &["src/chat/aiserver/v1/"],
+        )
+        .unwrap();
+    config
+        .compile_protos(&["src/chat/config/key.proto"], &["src/chat/config/"])
         .unwrap();
 
     // 静态资源文件处理
     println!("cargo:rerun-if-changed=scripts/minify.js");
     println!("cargo:rerun-if-changed=scripts/package.json");
-    println!("cargo:rerun-if-changed=static");
+    println!("cargo:rerun-if-changed=static/api.html");
+    println!("cargo:rerun-if-changed=static/build_key.html");
+    println!("cargo:rerun-if-changed=static/config.html");
+    println!("cargo:rerun-if-changed=static/logs.html");
+    println!("cargo:rerun-if-changed=static/shared-styles.css");
+    println!("cargo:rerun-if-changed=static/shared.js");
+    println!("cargo:rerun-if-changed=static/tokens.html");
+    println!("cargo:rerun-if-changed=README.md");
 
-    // 检查并安装依赖
-    check_and_install_deps()?;
+    #[cfg(not(any(feature = "use-minified")))]
+    {
+        // 检查并安装依赖
+        check_and_install_deps()?;
 
-    // 运行资源压缩
-    minify_assets()?;
+        // 运行资源压缩
+        minify_assets()?;
+    }
 
     Ok(())
 }

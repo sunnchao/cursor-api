@@ -7,7 +7,7 @@ use crate::{
         lazy::AUTH_TOKEN,
         model::{AppConfig, AppState, PageContent, RequestLog},
     },
-    common::{models::ApiStatus, utils::extract_token},
+    common::{model::ApiStatus, utils::extract_token},
 };
 use axum::{
     body::Body,

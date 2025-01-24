@@ -1,5 +1,5 @@
 /target
-/get-token/target
+/tools/*/target
 /*.log
 /*.env
 /static/*.min.html
@@ -12,9 +12,12 @@ node_modules
 /.cargo
 /.token
 /.token-list
+/.tokens
 /cursor-api
 /cursor-api.exe
 /release
 
 /*.py
 /logs
+/dev*
+/build*

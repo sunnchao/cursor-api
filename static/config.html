@@ -21,12 +21,13 @@
         <option value="/">根路径 (/)</option>
         <option value="/logs">日志页面 (/logs)</option>
         <option value="/config">配置页面 (/config)</option>
-        <option value="/tokeninfo">Token 信息页面 (/tokeninfo)</option>
+        <option value="/tokens">Token 管理页面 (/tokens)</option>
         <option value="/static/shared-styles.css">共享样式 (/static/shared-styles.css)</option>
         <option value="/static/shared.js">共享脚本 (/static/shared.js)</option>
         <option value="/about">关于页面 (/about)</option>
         <option value="/readme">ReadMe文档 (/readme)</option>
         <option value="/api">api调用 (/api)</option>
+        <option value="/build-key">构建动态 Key (/build-key)</option>
       </select>
     </div>
 
@@ -92,14 +93,40 @@
 
     <div class="form-group">
       <label>使用量检查模型规则:</label>
-      <select id="check_usage_models_type">
+      <select id="usage_check_models_type">
         <option value="">保持不变</option>
         <option value="none">禁用</option>
         <option value="default">默认</option>
         <option value="all">所有</option>
         <option value="list">自定义列表</option>
       </select>
-      <input type="text" id="check_usage_models_list" placeholder="模型列表，以逗号分隔" style="display: none;">
+      <input type="text" id="usage_check_models_list" placeholder="模型列表，以逗号分隔" style="display: none;">
+    </div>
+
+    <div class="form-group">
+      <label>是否允许动态配置Key:</label>
+      <select id="enable_dynamic_key">
+        <option value="">保持不变</option>
+        <option value="true">启用</option>
+        <option value="false">禁用</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>代理设置:</label>
+      <select id="proxies_type" onchange="handleProxiesTypeChange()">
+        <option value="">保持不变</option>
+        <option value="no">不使用代理</option>
+        <option value="system">使用系统代理</option>
+        <option value="list">自定义代理列表</option>
+      </select>
+      <input type="text" id="proxies_list" placeholder="代理地址列表，以逗号分隔 (例如: http://127.0.0.1:7890)"
+        style="display: none;">
+    </div>
+
+    <div class="form-group">
+      <label>共享令牌(空表示禁用):</label>
+      <input type="text" id="shareToken">
     </div>
 
     <div class="form-group">
@@ -114,125 +141,173 @@
     </div>
   </div>
 
-  <div id="result" class="message"></div>
+  <div id="message"></div>
 
   <script>
     async function fetchConfig() {
-      const path = document.getElementById('path').value;
-      const data = await makeAuthenticatedRequest('/config', {
-        body: JSON.stringify({ action: 'get', path })
-      });
+      try {
+        const path = document.getElementById('path').value;
+        const data = await makeAuthenticatedRequest('/config', {
+          body: JSON.stringify({ action: 'get', path })
+        });
 
-      if (data) {
-        let content = '';
+        if (data) {
+          let content = '';
 
-        // 获取当前路径的页面内容
-        const pageContent = data.data.page_content;
+          // 获取当前路径的页面内容
+          const pageContent = data.data.page_content;
 
-        // 如果是 default 类型，需要从路径获取内容
-        if (pageContent?.type === 'default') {
-          // 直接从路径获取内容
-          const response = await fetch(path);
-          content = await response.text();
-        } else if (pageContent?.type === 'text' || pageContent?.type === 'html') {
-          content = pageContent.content;
+          // 如果是 default 类型，需要从路径获取内容
+          if (pageContent?.type === 'default') {
+            // 直接从路径获取内容
+            const response = await fetch(path);
+            content = await response.text();
+          } else if (pageContent?.type === 'text' || pageContent?.type === 'html') {
+            content = pageContent.content;
+          }
+
+          // 更新表单
+          document.getElementById('content').value = content || '';
+          document.getElementById('content_type').value = pageContent?.type || 'default';
+          let visionValue = data.data.vision_ability || '';
+          // 标准化 vision_ability 的值
+          switch (visionValue) {
+            case 'none':
+              visionValue = 'disabled';
+              break;
+            case 'base64':
+              visionValue = 'base64-only';
+              break;
+            case 'all':
+              visionValue = 'base64-http';
+              break;
+          }
+          document.getElementById('enable_stream_check').value =
+            parseStringFromBoolean(data.data.enable_stream_check, '');
+          document.getElementById('include_stop_stream').value =
+            parseStringFromBoolean(data.data.include_stop_stream, '');
+          document.getElementById('vision_ability').value = visionValue;
+          document.getElementById('enable_slow_pool').value =
+            parseStringFromBoolean(data.data.enable_slow_pool, '');
+          document.getElementById('enable_all_claude').value =
+            parseStringFromBoolean(data.data.enable_all_claude, '');
+          document.getElementById('usage_check_models_type').value = data.data.usage_check_models?.type || '';
+          document.getElementById('usage_check_models_list').value = data.data.usage_check_models?.type === 'list' ? data.data.usage_check_models?.content || '' : document.getElementById('usage_check_models_list').value;
+          document.getElementById('enable_dynamic_key').value =
+            parseStringFromBoolean(data.data.enable_dynamic_key, '');
+
+          // 处理代理设置
+          const proxies = data.data.proxies || '';
+          let proxiesType = '';
+          let proxiesList = '';
+
+          if (proxies === '') {
+            proxiesType = 'no';
+          } else if (proxies === 'system') {
+            proxiesType = 'system';
+          } else {
+            proxiesType = 'list';
+            proxiesList = proxies;
+          }
+
+          document.getElementById('proxies_type').value = proxiesType;
+          document.getElementById('proxies_list').value = proxiesList;
+          handleProxiesTypeChange();
+
+          document.getElementById('shareToken').value = data.data.share_token || '';
+
+          // 添加获取配置成功提示
+          showGlobalMessage(`成功获取 ${path} 的配置`, false);
         }
-
-        // 更新表单
-        document.getElementById('content').value = content || '';
-        document.getElementById('content_type').value = pageContent?.type || 'default';
-        let visionValue = data.data.vision_ability || '';
-        // 标准化 vision_ability 的值
-        switch (visionValue) {
-          case 'none':
-            visionValue = 'disabled';
-            break;
-          case 'base64':
-            visionValue = 'base64-only';
-            break;
-          case 'all':
-            visionValue = 'base64-http';
-            break;
-        }
-        document.getElementById('enable_stream_check').value =
-          parseStringFromBoolean(data.data.enable_stream_check, '');
-        document.getElementById('include_stop_stream').value =
-          parseStringFromBoolean(data.data.include_stop_stream, '');
-        document.getElementById('vision_ability').value = visionValue;
-        document.getElementById('enable_slow_pool').value =
-          parseStringFromBoolean(data.data.enable_slow_pool, '');
-        document.getElementById('enable_all_claude').value =
-          parseStringFromBoolean(data.data.enable_all_claude, '');
-        document.getElementById('check_usage_models_type').value = data.data.check_usage_models?.type || '';
-        document.getElementById('check_usage_models_list').value = data.data.check_usage_models?.type === 'list' ? data.data.check_usage_models?.content || '' : document.getElementById('check_usage_models_list').value;
+      } catch (error) {
+        showGlobalMessage(error.message || '获取配置失败', true);
       }
     }
 
     async function updateConfig(action) {
-      if (action === 'get') {
-        await fetchConfig();
-        return;
-      }
-
-      const contentType = document.getElementById('content_type').value;
-      const content = document.getElementById('content').value;
-
-      // 根据内容类型构造 content 对象
-      let contentObj = { type: 'default' };
-      if (action === 'update' && contentType !== 'default') {
-        contentObj = {
-          type: contentType,
-          content: content
-        };
-      }
-
-      const data = {
-        action,
-        path: document.getElementById('path').value,
-        ...(contentObj && { content: contentObj }),
-        ...(document.getElementById('enable_stream_check').value && {
-          enable_stream_check: parseBooleanFromString(document.getElementById('enable_stream_check').value)
-        }),
-        ...(document.getElementById('include_stop_stream').value && {
-          include_stop_stream: parseBooleanFromString(document.getElementById('include_stop_stream').value)
-        }),
-        ...(document.getElementById('vision_ability').value && {
-          vision_ability: document.getElementById('vision_ability').value
-        }),
-        ...(document.getElementById('enable_slow_pool').value && {
-          enable_slow_pool: parseBooleanFromString(document.getElementById('enable_slow_pool').value)
-        }),
-        ...(document.getElementById('enable_all_claude').value && {
-          enable_all_claude: parseBooleanFromString(document.getElementById('enable_all_claude').value)
-        }),
-        ...(document.getElementById('check_usage_models_type').value && {
-          check_usage_models: {
-            type: document.getElementById('check_usage_models_type').value,
-            ...(document.getElementById('check_usage_models_type').value === 'list' && {
-              content: document.getElementById('check_usage_models_list').value
-            })
-          }
-        })
-      };
-
-      const result = await makeAuthenticatedRequest('/config', {
-        body: JSON.stringify(data)
-      });
-
-      if (result) {
-        showMessage('result', result.message, false);
-        if (action === 'update' || action === 'reset') {
+      try {
+        if (action === 'get') {
           await fetchConfig();
+          return;
         }
+
+        const contentType = document.getElementById('content_type').value;
+        const content = document.getElementById('content').value;
+
+        // 根据内容类型构造 content 对象
+        let contentObj = { type: 'default' };
+        if (action === 'update' && contentType !== 'default') {
+          contentObj = {
+            type: contentType,
+            content: content
+          };
+        }
+
+        const shareToken = document.getElementById('shareToken').value.trim();
+
+        const data = {
+          action,
+          path: document.getElementById('path').value,
+          ...(contentObj && { content: contentObj }),
+          ...(document.getElementById('enable_stream_check').value && {
+            enable_stream_check: parseBooleanFromString(document.getElementById('enable_stream_check').value)
+          }),
+          ...(document.getElementById('include_stop_stream').value && {
+            include_stop_stream: parseBooleanFromString(document.getElementById('include_stop_stream').value)
+          }),
+          ...(document.getElementById('vision_ability').value && {
+            vision_ability: document.getElementById('vision_ability').value
+          }),
+          ...(document.getElementById('enable_slow_pool').value && {
+            enable_slow_pool: parseBooleanFromString(document.getElementById('enable_slow_pool').value)
+          }),
+          ...(document.getElementById('enable_all_claude').value && {
+            enable_all_claude: parseBooleanFromString(document.getElementById('enable_all_claude').value)
+          }),
+          ...(document.getElementById('usage_check_models_type').value && {
+            usage_check_models: {
+              type: document.getElementById('usage_check_models_type').value,
+              ...(document.getElementById('usage_check_models_type').value === 'list' && {
+                content: document.getElementById('usage_check_models_list').value
+              })
+            }
+          }),
+          ...(document.getElementById('enable_dynamic_key').value && {
+            enable_dynamic_key: parseBooleanFromString(document.getElementById('enable_dynamic_key').value)
+          }),
+          ...(document.getElementById('proxies_type').value && {
+            proxies: (() => {
+              const type = document.getElementById('proxies_type').value;
+              switch (type) {
+                case 'no':
+                  return '';
+                case 'system':
+                  return 'system';
+                case 'list':
+                  return document.getElementById('proxies_list').value;
+                default:
+                  return undefined;
+              }
+            })()
+          }),
+          ...(shareToken && {
+            share_token: shareToken
+          }),
+        };
+
+        const result = await makeAuthenticatedRequest('/config', {
+          body: JSON.stringify(data)
+        });
+
+        if (result) {
+          showGlobalMessage(result.message, false);
+          if (action === 'update' || action === 'reset') {
+            await fetchConfig();
+          }
+        }
+      } catch (error) {
+        showGlobalMessage(error.message || '操作失败', true);
       }
-    }
-
-    function showSuccess(message) {
-      showMessage('result', message, false);
-    }
-
-    function showError(message) {
-      showMessage('result', message, true);
     }
 
     // 添加按钮事件监听
@@ -248,9 +323,26 @@
     initializeTokenHandling('authToken');
 
     // 添加使用量检查模型类型变更处理
-    document.getElementById('check_usage_models_type').addEventListener('change', function() {
-      const input = document.getElementById('check_usage_models_list');
+    document.getElementById('usage_check_models_type').addEventListener('change', function () {
+      const input = document.getElementById('usage_check_models_list');
       input.style.display = this.value === 'list' ? 'inline-block' : 'none';
+    });
+
+    // 添加代理类型变更处理函数
+    function handleProxiesTypeChange() {
+      const type = document.getElementById('proxies_type').value;
+      const list = document.getElementById('proxies_list');
+      list.style.display = type === 'list' ? 'inline-block' : 'none';
+    }
+
+    // 页面加载完成后自动获取配置
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        await fetchConfig();
+        showGlobalMessage('页面加载完成', false);
+      } catch (error) {
+        showGlobalMessage('初始化配置加载失败', true);
+      }
     });
   </script>
 </body>

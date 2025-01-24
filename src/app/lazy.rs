@@ -1,11 +1,11 @@
-use crate::{
-    app::constant::{
-        CURSOR_API2_HOST, CURSOR_HOST, DEFAULT_TOKEN_FILE_NAME, DEFAULT_TOKEN_LIST_FILE_NAME,
-        EMPTY_STRING,
-    },
-    common::utils::{parse_ascii_char_from_env, parse_string_from_env},
+use super::constant::{
+    COMMA, CURSOR_API2_HOST, CURSOR_HOST, DEFAULT_TOKEN_LIST_FILE_NAME, EMPTY_STRING,
+};
+use crate::common::utils::{
+    parse_ascii_char_from_env, parse_bool_from_env, parse_string_from_env, parse_usize_from_env,
 };
 use std::sync::LazyLock;
+use tokio::sync::{Mutex, OnceCell};
 
 macro_rules! def_pub_static {
     // 基础版本：直接存储 String
@@ -32,7 +32,6 @@ macro_rules! def_pub_static {
 
 def_pub_static!(ROUTE_PREFIX, env: "ROUTE_PREFIX", default: EMPTY_STRING);
 def_pub_static!(AUTH_TOKEN, env: "AUTH_TOKEN", default: EMPTY_STRING);
-def_pub_static!(TOKEN_FILE, env: "TOKEN_FILE", default: DEFAULT_TOKEN_FILE_NAME);
 def_pub_static!(TOKEN_LIST_FILE, env: "TOKEN_LIST_FILE", default: DEFAULT_TOKEN_LIST_FILE_NAME);
 def_pub_static!(ROUTE_MODELS_PATH, format!("{}/v1/models", *ROUTE_PREFIX));
 def_pub_static!(
@@ -51,70 +50,128 @@ def_pub_static!(DEFAULT_INSTRUCTIONS, env: "DEFAULT_INSTRUCTIONS", default: "Res
 
 def_pub_static!(REVERSE_PROXY_HOST, env: "REVERSE_PROXY_HOST", default: EMPTY_STRING);
 
-def_pub_static!(SHARED_AUTH_TOKEN, env: "SHARED_AUTH_TOKEN", default: EMPTY_STRING);
+const DEFAULT_KEY_PREFIX: &str = "sk-";
 
-pub static USE_SHARE: LazyLock<bool> = LazyLock::new(|| !SHARED_AUTH_TOKEN.is_empty());
+pub static KEY_PREFIX: LazyLock<String> = LazyLock::new(|| {
+    let value = parse_string_from_env("KEY_PREFIX", DEFAULT_KEY_PREFIX)
+        .trim()
+        .to_string();
+    if value.is_empty() {
+        DEFAULT_KEY_PREFIX.to_string()
+    } else {
+        value
+    }
+});
+
+pub static KEY_PREFIX_LEN: LazyLock<usize> = LazyLock::new(|| KEY_PREFIX.len());
 
 pub static TOKEN_DELIMITER: LazyLock<char> = LazyLock::new(|| {
-    let delimiter = parse_ascii_char_from_env("TOKEN_DELIMITER", ',');
+    let delimiter = parse_ascii_char_from_env("TOKEN_DELIMITER", COMMA);
     if delimiter.is_ascii_alphabetic()
         || delimiter.is_ascii_digit()
         || delimiter == '+'
         || delimiter == '/'
     {
-        ','
+        COMMA
     } else {
         delimiter
     }
 });
 
-pub static TOKEN_DELIMITER_LEN: LazyLock<usize> = LazyLock::new(|| TOKEN_DELIMITER.len_utf8());
-
-pub static USE_PROXY: LazyLock<bool> = LazyLock::new(|| !REVERSE_PROXY_HOST.is_empty());
-
-pub static CURSOR_API2_CHAT_URL: LazyLock<String> = LazyLock::new(|| {
-    let host = if *USE_PROXY {
-        &*REVERSE_PROXY_HOST
+pub static USE_COMMA_DELIMITER: LazyLock<bool> = LazyLock::new(|| {
+    let enable = parse_bool_from_env("USE_COMMA_DELIMITER", true);
+    if enable && *TOKEN_DELIMITER == COMMA {
+        false
     } else {
-        CURSOR_API2_HOST
-    };
-    format!("https://{}/aiserver.v1.AiService/StreamChat", host)
+        enable
+    }
 });
 
-pub static CURSOR_API2_STRIPE_URL: LazyLock<String> = LazyLock::new(|| {
-    let host = if *USE_PROXY {
-        &*REVERSE_PROXY_HOST
-    } else {
-        CURSOR_API2_HOST
+pub static USE_REVERSE_PROXY: LazyLock<bool> = LazyLock::new(|| !REVERSE_PROXY_HOST.is_empty());
+
+macro_rules! def_cursor_api_url {
+    ($name:ident, $api_host:expr, $path:expr) => {
+        pub static $name: LazyLock<String> = LazyLock::new(|| {
+            let host = if *USE_REVERSE_PROXY {
+                &*REVERSE_PROXY_HOST
+            } else {
+                $api_host
+            };
+            format!("https://{}{}", host, $path)
+        });
     };
-    format!("https://{}/auth/full_stripe_profile", host)
-});
+}
 
-pub static CURSOR_USAGE_API_URL: LazyLock<String> = LazyLock::new(|| {
-    let host = if *USE_PROXY {
-        &*REVERSE_PROXY_HOST
-    } else {
-        CURSOR_HOST
+def_cursor_api_url!(
+    CURSOR_API2_CHAT_URL,
+    CURSOR_API2_HOST,
+    "/aiserver.v1.AiService/StreamChat"
+);
+
+def_cursor_api_url!(
+    CURSOR_API2_STRIPE_URL,
+    CURSOR_API2_HOST,
+    "/auth/full_stripe_profile"
+);
+
+def_cursor_api_url!(CURSOR_USAGE_API_URL, CURSOR_HOST, "/api/usage");
+
+def_cursor_api_url!(CURSOR_USER_API_URL, CURSOR_HOST, "/api/auth/me");
+
+pub static DEBUG: LazyLock<bool> = LazyLock::new(|| parse_bool_from_env("DEBUG", false));
+
+// 使用环境变量 "DEBUG_LOG_FILE" 来指定日志文件路径，默认值为 "debug.log"
+static DEBUG_LOG_FILE: LazyLock<String> =
+    LazyLock::new(|| parse_string_from_env("DEBUG_LOG_FILE", "debug.log"));
+
+// 使用 OnceCell 结合 Mutex 来异步初始化 LOG_FILE
+static LOG_FILE: OnceCell<Mutex<tokio::fs::File>> = OnceCell::const_new();
+
+pub(crate) async fn get_log_file() -> &'static Mutex<tokio::fs::File> {
+    LOG_FILE
+        .get_or_init(|| async {
+            Mutex::new(
+                tokio::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&*DEBUG_LOG_FILE)
+                    .await
+                    .expect("无法打开日志文件"),
+            )
+        })
+        .await
+}
+
+#[macro_export]
+macro_rules! debug_println {
+    ($($arg:tt)*) => {
+        if *crate::app::lazy::DEBUG {
+            let time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            let log_message = format!("{} - {}", time, format!($($arg)*));
+            use tokio::io::AsyncWriteExt as _;
+
+            // 使用 tokio 的 spawn 在后台异步写入日志
+            tokio::spawn(async move {
+                let log_file = crate::app::lazy::get_log_file().await;
+                // 使用 MutexGuard 获取可变引用
+                let mut file = log_file.lock().await;
+                if let Err(err) = file.write_all(log_message.as_bytes()).await {
+                    eprintln!("写入日志文件失败: {}", err);
+                }
+                if let Err(err) = file.write_all(b"\n").await {
+                    eprintln!("写入换行符失败: {}", err);
+                }
+                // 可以选择在写入失败时 panic，或者忽略
+                // panic!("写入日志文件失败: {}", err);
+            });
+        }
     };
-    format!("https://{}/api/usage", host)
+}
+
+pub static REQUEST_LOGS_LIMIT: LazyLock<usize> =
+    LazyLock::new(|| std::cmp::min(parse_usize_from_env("REQUEST_LOGS_LIMIT", 100), 2000));
+
+pub static SERVICE_TIMEOUT: LazyLock<u64> = LazyLock::new(|| {
+    let timeout = parse_usize_from_env("SERVICE_TIMEOUT", 30);
+    u64::try_from(timeout).map(|t| t.min(600)).unwrap_or(30)
 });
-
-pub static CURSOR_USER_API_URL: LazyLock<String> = LazyLock::new(|| {
-    let host = if *USE_PROXY {
-        &*REVERSE_PROXY_HOST
-    } else {
-        CURSOR_HOST
-    };
-    format!("https://{}/api/auth/me", host)
-});
-
-// pub static DEBUG: LazyLock<bool> = LazyLock::new(|| parse_bool_from_env("DEBUG", false));
-
-// #[macro_export]
-// macro_rules! debug_println {
-//     ($($arg:tt)*) => {
-//         if *crate::app::statics::DEBUG {
-//             println!($($arg)*);
-//         }
-//     };
-// }

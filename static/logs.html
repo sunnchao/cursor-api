@@ -354,6 +354,28 @@
     #logsTable tr:hover td {
       background-color: var(--hover-color, rgba(0, 0, 0, 0.02));
     }
+
+    .modal-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .danger-button {
+      padding: 6px 12px;
+      font-size: 14px;
+      border-radius: var(--border-radius);
+      background: var(--error-color-alpha);
+      color: var(--error-color);
+      border: 1px solid var(--error-color);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .danger-button:hover {
+      background: var(--error-color);
+      color: white;
+    }
   </style>
 </head>
 
@@ -423,7 +445,10 @@
     <div class="modal-content">
       <div class="modal-header">
         <h3>Token 详细信息</h3>
-        <span class="close">&times;</span>
+        <div class="modal-actions">
+          <button class="danger-button" id="deleteTokenBtn">删除此Token</button>
+          <span class="close">&times;</span>
+        </div>
       </div>
       <table class="message-table">
         <tr>
@@ -543,6 +568,42 @@
 
     function showTokenModal(tokenInfo) {
       const modal = document.getElementById('tokenModal');
+      const deleteBtn = document.getElementById('deleteTokenBtn');
+
+      // 存储当前token用于删除操作
+      const currentToken = tokenInfo.token;
+
+      // 更新删除按钮点击事件
+      deleteBtn.onclick = async () => {
+        if (!currentToken) {
+          showGlobalMessage('无效的Token', true);
+          return;
+        }
+
+        if (!confirm('确定要删除此Token吗？此操作不可撤销。')) {
+          return;
+        }
+
+        const data = await makeAuthenticatedRequest('/tokens/delete', {
+          method: 'POST',
+          body: JSON.stringify({
+            tokens: [currentToken],
+            expectation: 'failed_tokens'
+          })
+        });
+
+        if (data) {
+          modal.style.display = 'none';
+          let message = 'Token删除成功';
+          if (data.failed_tokens?.length) {
+            message = 'Token删除失败：未找到该Token';
+          }
+          showGlobalMessage(message);
+          // 刷新日志列表
+          fetchLogs();
+        }
+      };
+
       document.getElementById('modalToken').textContent = tokenInfo.token || '-';
       document.getElementById('modalChecksum').textContent = tokenInfo.checksum || '-';
 
@@ -634,7 +695,7 @@
       const tbody = document.getElementById('logsBody');
       updateStats(data);
 
-      tbody.innerHTML = data.logs.map(log => `<tr><td>${log.id}</td><td>${new Date(log.timestamp).toLocaleString()}</td><td>${log.model}</td><td><div class="token-info-tooltip"><button class="info-button" onclick='showTokenModal(${JSON.stringify(log.token_info)})'>查看详情<div class="tooltip-content">${formatSimpleTokenInfo(log.token_info)}</div></button></div></td><td>${log.prompt ?`<div class="token-info-tooltip prompt-preview"><button class="info-button" onclick="showPromptModal(decodeURIComponent('${encodeURIComponent(log.prompt).replace(/'/g, "\\'")}'))">查看对话<div class="tooltip-content">${formatPromptPreview(log.prompt)}</div></button></div>` :'-'}</td><td>${formatTiming(log.timing.total, log.timing.first)}</td><td>${log.stream ? '是' : '否'}</td><td>${log.status}</td><td>${log.error || '-'}</td></tr>`).join('');
+      tbody.innerHTML = data.logs.map(log => `<tr><td>${log.id}</td><td>${new Date(log.timestamp).toLocaleString()}</td><td>${log.model}</td><td><div class="token-info-tooltip"><button class="info-button" onclick='showTokenModal(${JSON.stringify(log.token_info)})'>查看详情<div class="tooltip-content">${formatSimpleTokenInfo(log.token_info)}</div></button></div></td><td>${log.prompt ? `<div class="token-info-tooltip prompt-preview"><button class="info-button" onclick="showPromptModal(decodeURIComponent('${encodeURIComponent(log.prompt).replace(/'/g, "\\'")}'))">查看对话<div class="tooltip-content">${formatPromptPreview(log.prompt)}</div></button></div>` : '-'}</td><td>${formatTiming(log.timing.total, log.timing.first)}</td><td>${log.stream ? '是' : '否'}</td><td>${log.status}</td><td>${log.error || '-'}</td></tr>`).join('');
     }
 
     function formatTiming(total, first) {

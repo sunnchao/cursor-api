@@ -16,6 +16,7 @@ def_pub_const!(ANTHROPIC, "anthropic");
 def_pub_const!(CURSOR, "cursor");
 def_pub_const!(GOOGLE, "google");
 def_pub_const!(OPENAI, "openai");
+def_pub_const!(DEEPSEEK, "deepseek");
 
 def_pub_const!(CLAUDE_3_5_SONNET, "claude-3.5-sonnet");
 def_pub_const!(GPT_4, "gpt-4");
@@ -41,8 +42,10 @@ def_pub_const!(
     "gemini-2.0-flash-thinking-exp"
 );
 def_pub_const!(GEMINI_2_0_FLASH_EXP, "gemini-2.0-flash-exp");
+def_pub_const!(DEEPSEEK_V3, "deepseek-v3");
+def_pub_const!(DEEPSEEK_R1, "deepseek-r1");
 
-pub const AVAILABLE_MODELS: [Model; 21] = [
+pub const AVAILABLE_MODELS: [Model; 23] = [
     Model {
         id: CLAUDE_3_5_SONNET,
         created: CREATED,
@@ -169,6 +172,18 @@ pub const AVAILABLE_MODELS: [Model; 21] = [
         object: MODEL_OBJECT,
         owned_by: GOOGLE,
     },
+    Model {
+        id: DEEPSEEK_V3,
+        created: CREATED,
+        object: MODEL_OBJECT,
+        owned_by: DEEPSEEK,
+    },
+    Model {
+        id: DEEPSEEK_R1,
+        created: CREATED,
+        object: MODEL_OBJECT,
+        owned_by: DEEPSEEK,
+    },
 ];
 
 pub const USAGE_CHECK_MODELS: [&str; 11] = [
@@ -191,3 +206,5 @@ pub const LONG_CONTEXT_MODELS: [&str; 4] = [
     CLAUDE_3_HAIKU_200K,
     CLAUDE_3_5_SONNET_200K,
 ];
+
+// include!("constant/models.rs");

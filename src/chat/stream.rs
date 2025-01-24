@@ -91,16 +91,17 @@ pub fn parse_stream_data(data: &[u8]) -> Result<StreamMessage, StreamError> {
             // gzip压缩消息
             1 => {
                 if let Some(text) = decompress_gzip(msg_data) {
-                    let response = StreamChatResponse::decode(&text[..]).unwrap_or_default();
-                    // crate::debug_println!("[gzip] StreamChatResponse: {:?}", response);
-                    if !response.text.is_empty() {
-                        messages.push(response.text);
-                    } else {
-                        // println!("[gzip] StreamChatResponse: {:?}", response);
-                        return Ok(StreamMessage::Debug(
-                            response.filled_prompt.unwrap_or_default(),
-                            // response.is_using_slow_request,
-                        ));
+                    if let Ok(response) = StreamChatResponse::decode(&text[..]) {
+                        // crate::debug_println!("[gzip] StreamChatResponse: {:?}", response);
+                        if !response.text.is_empty() {
+                            messages.push(response.text);
+                        } else {
+                            // println!("[gzip] StreamChatResponse: {:?}", response);
+                            return Ok(StreamMessage::Debug(
+                                response.filled_prompt.unwrap_or_default(),
+                                // response.is_using_slow_request,
+                            ));
+                        }
                     }
                 }
             }
@@ -118,8 +119,27 @@ pub fn parse_stream_data(data: &[u8]) -> Result<StreamMessage, StreamError> {
                     // messages.push(text);
                 }
             }
+            // gzip压缩消息
+            3 => {
+                if let Some(text) = decompress_gzip(msg_data) {
+                    if text.len() == 2 {
+                        return Ok(StreamMessage::StreamEnd);
+                    }
+                    if let Ok(text) = String::from_utf8(text) {
+                        // println!("JSON消息: {}", text);
+                        if let Ok(error) = serde_json::from_str::<ChatError>(&text) {
+                            return Err(StreamError::ChatError(error));
+                        }
+                        // 未预计
+                        // messages.push(text);
+                    }
+                }
+            }
             // 其他类型暂不处理
-            t => eprintln!("收到未知消息类型: {}，请尝试联系开发者以获取支持", t),
+            t => {
+                eprintln!("收到未知消息类型: {}，请尝试联系开发者以获取支持", t);
+                crate::debug_println!("消息类型: {}，消息内容: {}", t, hex::encode(msg_data));
+            }
         }
 
         offset += 5 + msg_len;
@@ -158,7 +178,8 @@ fn test_parse_stream_data() {
 
     // 辅助函数：将字节转换为hex字符串
     fn bytes_to_hex(bytes: &[u8]) -> String {
-        bytes.iter()
+        bytes
+            .iter()
             .map(|b| format!("{:02X}", b))
             .collect::<Vec<String>>()
             .join("")
@@ -171,7 +192,7 @@ fn test_parse_stream_data() {
         let msg_boundary = find_next_message_boundary(remaining_bytes);
         let current_msg_bytes = &remaining_bytes[..msg_boundary];
         let hex_str = bytes_to_hex(current_msg_bytes);
-        
+
         match parse_stream_data(current_msg_bytes) {
             Ok(message) => {
                 match message {

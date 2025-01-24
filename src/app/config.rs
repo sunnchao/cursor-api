@@ -1,9 +1,5 @@
-use super::{
-    constant::AUTHORIZATION_BEARER_PREFIX,
-    lazy::AUTH_TOKEN,
-    model::AppConfig,
-};
-use crate::common::models::{
+use super::{constant::AUTHORIZATION_BEARER_PREFIX, lazy::AUTH_TOKEN, model::AppConfig};
+use crate::common::model::{
     config::{ConfigData, ConfigUpdateRequest},
     ApiStatus, ErrorResponse, NormalResponse,
 };
@@ -13,40 +9,24 @@ use axum::{
 };
 
 // 定义处理更新操作的宏
-macro_rules! handle_update {
-    ($request:expr, $field:ident, $update_fn:expr, $field_name:expr) => {
-        if let Some($field) = $request.$field {
-            if let Err(e) = $update_fn($field) {
-                return Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        status: ApiStatus::Failed,
-                        code: Some(500),
-                        error: Some(format!("更新 {} 失败: {}", $field_name, e)),
-                        message: None,
-                    }),
-                ));
+macro_rules! handle_updates {
+    ($request:expr, $($field:ident => $update_fn:expr),* $(,)?) => {
+        $(
+            if let Some(value) = $request.$field {
+                $update_fn(value);
             }
-        }
+        )*
     };
 }
 
 // 定义处理重置操作的宏
-macro_rules! handle_reset {
-    ($request:expr, $field:ident, $reset_fn:expr, $field_name:expr) => {
-        if $request.$field.is_some() {
-            if let Err(e) = $reset_fn() {
-                return Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        status: ApiStatus::Failed,
-                        code: Some(500),
-                        error: Some(format!("重置 {} 失败: {}", $field_name, e)),
-                        message: None,
-                    }),
-                ));
+macro_rules! handle_resets {
+    ($request:expr, $($field:ident => $reset_fn:expr),* $(,)?) => {
+        $(
+            if $request.$field.is_some() {
+                $reset_fn();
             }
-        }
+        )*
     };
 }
 
@@ -90,7 +70,10 @@ pub async fn handle_config_update(
                 vision_ability: AppConfig::get_vision_ability(),
                 enable_slow_pool: AppConfig::get_slow_pool(),
                 enable_all_claude: AppConfig::get_allow_claude(),
-                check_usage_models: AppConfig::get_usage_check(),
+                usage_check_models: AppConfig::get_usage_check(),
+                enable_dynamic_key: AppConfig::get_dynamic_key(),
+                share_token: AppConfig::get_share_token(),
+                proxies: AppConfig::get_proxies(),
             }),
             message: None,
         })),
@@ -112,41 +95,16 @@ pub async fn handle_config_update(
                 }
             }
 
-            handle_update!(
-                request,
-                enable_stream_check,
-                AppConfig::update_stream_check,
-                "enable_stream_check"
-            );
-            handle_update!(
-                request,
-                include_stop_stream,
-                AppConfig::update_stop_stream,
-                "include_stop_stream"
-            );
-            handle_update!(
-                request,
-                vision_ability,
-                AppConfig::update_vision_ability,
-                "vision_ability"
-            );
-            handle_update!(
-                request,
-                enable_slow_pool,
-                AppConfig::update_slow_pool,
-                "enable_slow_pool"
-            );
-            handle_update!(
-                request,
-                enable_all_claude,
-                AppConfig::update_allow_claude,
-                "enable_all_claude"
-            );
-            handle_update!(
-                request,
-                check_usage_models,
-                AppConfig::update_usage_check,
-                "check_usage_models"
+            handle_updates!(request,
+                enable_stream_check => AppConfig::update_stream_check,
+                include_stop_stream => AppConfig::update_stop_stream,
+                vision_ability => AppConfig::update_vision_ability,
+                enable_slow_pool => AppConfig::update_slow_pool,
+                enable_all_claude => AppConfig::update_allow_claude,
+                usage_check_models => AppConfig::update_usage_check,
+                enable_dynamic_key => AppConfig::update_dynamic_key,
+                share_token => AppConfig::update_share_token,
+                proxies => AppConfig::update_proxies,
             );
 
             Ok(Json(NormalResponse {
@@ -172,41 +130,16 @@ pub async fn handle_config_update(
                 }
             }
 
-            handle_reset!(
-                request,
-                enable_stream_check,
-                AppConfig::reset_stream_check,
-                "enable_stream_check"
-            );
-            handle_reset!(
-                request,
-                include_stop_stream,
-                AppConfig::reset_stop_stream,
-                "include_stop_stream"
-            );
-            handle_reset!(
-                request,
-                vision_ability,
-                AppConfig::reset_vision_ability,
-                "vision_ability"
-            );
-            handle_reset!(
-                request,
-                enable_slow_pool,
-                AppConfig::reset_slow_pool,
-                "enable_slow_pool"
-            );
-            handle_reset!(
-                request,
-                enable_all_claude,
-                AppConfig::reset_allow_claude,
-                "enable_all_claude"
-            );
-            handle_reset!(
-                request,
-                check_usage_models,
-                AppConfig::reset_usage_check,
-                "check_usage_models"
+            handle_resets!(request,
+                enable_stream_check => AppConfig::reset_stream_check,
+                include_stop_stream => AppConfig::reset_stop_stream,
+                vision_ability => AppConfig::reset_vision_ability,
+                enable_slow_pool => AppConfig::reset_slow_pool,
+                enable_all_claude => AppConfig::reset_allow_claude,
+                usage_check_models => AppConfig::reset_usage_check,
+                enable_dynamic_key => AppConfig::reset_dynamic_key,
+                share_token => AppConfig::reset_share_token,
+                proxies => AppConfig::reset_proxies,
             );
 
             Ok(Json(NormalResponse {

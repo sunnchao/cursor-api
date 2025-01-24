@@ -140,7 +140,7 @@
     <div id="usageProgressContainer" class="progress-container"></div>
   </div>
 
-  <div id="message" class="message"></div>
+  <div id="message"></div>
 
   <footer class="footer">
     <div id="version"></div>
@@ -198,11 +198,16 @@
 
     // 获取模型列表
     async function getModels() {
-      const modelList = document.getElementById('modelList');
-      const suffix = document.getElementById('customSuffix').checked ?
-        document.getElementById('suffixInput').value : '';
+      try {
+        const modelList = document.getElementById('modelList');
+        const suffix = document.getElementById('customSuffix').checked ?
+          document.getElementById('suffixInput').value : '';
 
-      modelList.value = globalModels.map(model => model + suffix).join(',');
+        modelList.value = globalModels.map(model => model + suffix).join(',');
+        showGlobalMessage('模型列表已更新');
+      } catch (error) {
+        showGlobalMessage('获取模型列表失败', true);
+      }
     }
 
     // 复制模型列表
@@ -234,7 +239,7 @@
         });
 
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          throw new Error(`请求失败 (${response.status})`);
         }
 
         return await response.json();
@@ -261,9 +266,13 @@
           calibrationCache.set(token, {
             user_id: result.user_id,
             create_at: result.create_at,
-            checksum_time: calibResult.checksum_time
+            checksum_time: result.checksum_time
           });
-          updateUsageDisplay(null, calibrationCache.get(token));
+
+          // 显示基本校准信息
+          const container = document.getElementById('userInfoContainer');
+          container.style.display = 'block';
+          updateUsageDisplay({ user: null }, calibrationCache.get(token));
         }
       }
     }
@@ -275,15 +284,13 @@
         showGlobalMessage('请输入 Token', true);
         return;
       }
+
       // 如果没有校准缓存，先进行校准
       if (!calibrationCache.has(token)) {
-        const calibResult = await makeTokenRequest('/basic-calibration', token);
-        if (calibResult && calibResult.status !== 'error') {
-          calibrationCache.set(token, {
-            user_id: calibResult.user_id,
-            create_at: calibResult.create_at,
-            checksum_time: calibResult.checksum_time
-          });
+        showGlobalMessage('正在进行 Token 校准...');
+        await calibrateToken();
+        if (!calibrationCache.has(token)) {
+          return; // 如果校准失败，直接返回
         }
       }
 
@@ -292,6 +299,7 @@
         const container = document.getElementById('userInfoContainer');
         container.style.display = 'block';
         updateUsageDisplay(result, calibrationCache.get(token));
+        showGlobalMessage('用户信息获取成功');
       }
     }
 
@@ -350,11 +358,16 @@
     });
 
     // 页面加载完成后初始化
-    document.addEventListener('DOMContentLoaded', () => {
-      startStatusCheck();
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        await startStatusCheck();
+        showGlobalMessage('系统初始化完成');
 
-      // 监听后缀输入变化
-      document.getElementById('suffixInput').addEventListener('input', getModels);
+        // 监听后缀输入变化
+        document.getElementById('suffixInput').addEventListener('input', getModels);
+      } catch (error) {
+        showGlobalMessage('系统初始化失败', true);
+      }
     });
   </script>
 </body>

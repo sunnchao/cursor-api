@@ -24,19 +24,50 @@ function getAuthToken() {
 
 // 消息显示功能
 function showMessage(elementId, text, isError = false) {
-  const msg = document.getElementById(elementId);
-  msg.className = `message ${isError ? 'error' : 'success'}`;
-  msg.textContent = text;
+  let msg = document.getElementById(elementId);
+
+  // 如果消息元素不存在，创建一个新的
+  if (!msg) {
+    msg = document.createElement('div');
+    msg.id = elementId;
+    document.body.appendChild(msg);
+  }
+
+  msg.className = `floating-message ${isError ? 'error' : 'success'}`;
+  msg.innerHTML = text.replace(/\n/g, '<br>');
 }
 
-function showGlobalMessage(text, isError = false) {
-  showMessage('message', text, isError);
-  // 3秒后自动清除消息
+// 确保消息容器存在
+function ensureMessageContainer() {
+  let container = document.querySelector('.message-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'message-container';
+    document.body.appendChild(container);
+  }
+  return container;
+}
+
+function showGlobalMessage(text, isError = false, timeout = 3000) {
+  const container = ensureMessageContainer();
+
+  const msgElement = document.createElement('div');
+  msgElement.className = `message ${isError ? 'error' : 'success'}`;
+  msgElement.textContent = text;
+
+  container.appendChild(msgElement);
+
+  // 设置淡出动画和移除
   setTimeout(() => {
-    const msg = document.getElementById('message');
-    msg.textContent = '';
-    msg.className = 'message';
-  }, 3000);
+    msgElement.style.animation = 'messageOut 0.3s ease-in-out';
+    setTimeout(() => {
+      msgElement.remove();
+      // 如果容器为空，也移除容器
+      if (container.children.length === 0) {
+        container.remove();
+      }
+    }, 300);
+  }, timeout);
 }
 
 // Token 输入框自动填充和事件绑定

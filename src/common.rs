@@ -1,3 +1,3 @@
-pub mod models;
+pub mod model;
 pub mod utils;
 pub mod client;

@@ -8,6 +8,8 @@ fn main() {
         .unwrap();
     let db_path = if cfg!(target_os = "windows") {
         PathBuf::from(home_dir).join(r"AppData\Roaming\Cursor\User\globalStorage\state.vscdb")
+    } else if cfg!(target_os = "linux") {
+        PathBuf::from(home_dir).join(".config/Cursor/User/globalStorage/state.vscdb")
     } else {
         PathBuf::from(home_dir)
             .join("Library/Application Support/Cursor/User/globalStorage/state.vscdb")

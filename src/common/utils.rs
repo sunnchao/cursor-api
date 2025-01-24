@@ -1,12 +1,15 @@
 mod checksum;
+use ::base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 pub use checksum::*;
-mod tokens;
-pub use tokens::*;
+mod token;
+pub use token::*;
+mod base64;
+pub use base64::*;
 
-use super::models::userinfo::{StripeProfile, TokenProfile, UsageProfile, UserProfile};
+use super::model::{token::TokenPayload, userinfo::{StripeProfile, TokenProfile, UsageProfile, UserProfile}};
 use crate::app::{
-    constant::{FALSE, TRUE},
-    lazy::{TOKEN_DELIMITER, TOKEN_DELIMITER_LEN},
+    constant::{COMMA, FALSE, TRUE},
+    lazy::{TOKEN_DELIMITER, USE_COMMA_DELIMITER},
 };
 
 pub fn parse_bool_from_env(key: &str, default: bool) -> bool {
@@ -102,10 +105,20 @@ pub async fn get_user_profile(auth_token: &str) -> Option<UserProfile> {
 }
 
 pub fn validate_token_and_checksum(auth_token: &str) -> Option<(String, String)> {
-    // 找最后一个逗号
-    let comma_pos = auth_token.rfind(*TOKEN_DELIMITER)?;
+    // 尝试使用自定义分隔符查找
+    let mut delimiter_pos = auth_token.rfind(*TOKEN_DELIMITER);
+
+    // 如果自定义分隔符未找到，并且 USE_COMMA_DELIMITER 为 true，则尝试使用逗号
+    if delimiter_pos.is_none() && *USE_COMMA_DELIMITER {
+        delimiter_pos = auth_token.rfind(COMMA);
+    }
+
+    // 如果最终都没有找到分隔符，则返回 None
+    let comma_pos = delimiter_pos?;
+
+    // 使用找到的分隔符位置分割字符串
     let (token_part, checksum) = auth_token.split_at(comma_pos);
-    let checksum = &checksum[*TOKEN_DELIMITER_LEN..]; // 跳过逗号
+    let checksum = &checksum[1..]; // 跳过逗号
 
     // 解析 token - 为了向前兼容,忽略最后一个:或%3A前的内容
     let colon_pos = token_part.rfind(':');
@@ -124,15 +137,23 @@ pub fn validate_token_and_checksum(auth_token: &str) -> Option<(String, String)>
 
     // 验证 token 和 checksum 有效性
     if validate_token(token) && validate_checksum(checksum) {
-        Some((token.to_string(), checksum.to_string()))
+        Some((token.to_string(), generate_checksum_with_repair(checksum)))
     } else {
         None
     }
 }
 
 pub fn extract_token(auth_token: &str) -> Option<String> {
-    // 解析 token
-    let token_part = match auth_token.rfind(*TOKEN_DELIMITER) {
+    // 尝试使用自定义分隔符查找
+    let mut delimiter_pos = auth_token.rfind(*TOKEN_DELIMITER);
+
+    // 如果自定义分隔符未找到，并且 USE_COMMA_DELIMITER 为 true，则尝试使用逗号
+    if delimiter_pos.is_none() && *USE_COMMA_DELIMITER {
+        delimiter_pos = auth_token.rfind(COMMA);
+    }
+
+    // 根据是否找到分隔符来确定 token_part
+    let token_part = match delimiter_pos {
         Some(pos) => &auth_token[..pos],
         None => auth_token,
     };
@@ -162,4 +183,79 @@ pub fn extract_token(auth_token: &str) -> Option<String> {
 
 pub fn format_time_ms(seconds: f64) -> f64 {
     (seconds * 1000.0).round() / 1000.0
+}
+
+use crate::chat::config::key_config;
+
+/// 将 JWT token 转换为 TokenInfo
+pub fn token_to_tokeninfo(auth_token: &str) -> Option<key_config::TokenInfo> {
+    let (token, checksum) = validate_token_and_checksum(auth_token)?;
+
+    // JWT token 由3部分组成，用 . 分隔
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+
+    // 解码 payload (第二部分)
+    let payload = match URL_SAFE_NO_PAD.decode(parts[1]) {
+        Ok(decoded) => decoded,
+        Err(_) => return None,
+    };
+
+    // 将 payload 转换为字符串
+    let payload_str = match String::from_utf8(payload) {
+        Ok(s) => s,
+        Err(_) => return None,
+    };
+
+    // 解析为 TokenPayload
+    let payload: TokenPayload = match serde_json::from_str(&payload_str) {
+        Ok(p) => p,
+        Err(_) => return None,
+    };
+
+    let (machine_id_hash, mac_id_hash) = extract_hashes(&checksum)?;
+
+    // 构建 TokenInfo
+    Some(key_config::TokenInfo {
+        sub: payload.sub,
+        exp: payload.exp,
+        randomness: payload.randomness,
+        signature: parts[2].to_string(),
+        machine_id: machine_id_hash,
+        mac_id: mac_id_hash,
+    })
+}
+
+/// 将 TokenInfo 转换为 JWT token
+pub fn tokeninfo_to_token(info: &key_config::TokenInfo) -> Option<(String, String)> {
+    // 构建 payload
+    let payload = TokenPayload {
+        sub: info.sub.clone(),
+        exp: info.exp,
+        randomness: info.randomness.clone(),
+        time: (info.exp - 2592000000).to_string(), // exp - 30000天
+        iss: ISSUER.to_string(),
+        scope: SCOPE.to_string(),
+        aud: AUDIENCE.to_string(),
+    };
+
+    let payload_str = match serde_json::to_string(&payload) {
+        Ok(s) => s,
+        Err(_) => return None,
+    };
+
+    let payload_b64 = URL_SAFE_NO_PAD.encode(payload_str.as_bytes());
+
+    // 从 TokenInfo 中获取 machine_id 和 mac_id 的 hex 字符串
+    let device_id = hex::encode(&info.machine_id);
+    let mac_addr = if !info.mac_id.is_empty() {
+        Some(hex::encode(&info.mac_id))
+    } else {
+        None
+    };
+
+    // 组合 token
+    Some((format!("{}.{}.{}", HEADER_B64, payload_b64, info.signature), generate_checksum(&device_id, mac_addr.as_deref())))
 }

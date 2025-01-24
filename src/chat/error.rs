@@ -1,4 +1,7 @@
-use super::aiserver::v1::error_details::Error as ErrorType;
+use super::aiserver::v1::ErrorDetails;
+use crate::common::model::{ApiStatus, ErrorResponse as CommonErrorResponse};
+use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine as _};
+use prost::Message as _;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
@@ -18,30 +21,28 @@ pub struct ErrorBody {
 pub struct ErrorDetail {
     // #[serde(rename = "type")]
     // error_type: String, always: aiserver.v1.ErrorDetails
-    debug: ErrorDebug,
+    // debug: ErrorDebug,
     value: String,
 }
 
-#[derive(Deserialize)]
-pub struct ErrorDebug {
-    error: String,
-    details: ErrorDetails,
-    // #[serde(rename = "isExpected")]
-    // is_expected: Option<bool>,
-}
+// #[derive(Deserialize)]
+// pub struct ErrorDebug {
+//     error: String,
+//     details: ErrorDetails,
+//     // #[serde(rename = "isExpected")]
+//     // is_expected: Option<bool>,
+// }
 
-#[derive(Deserialize)]
-pub struct ErrorDetails {
-    title: String,
-    detail: String,
-    // #[serde(rename = "isRetryable")]
-    // is_retryable: Option<bool>,
-}
-
-use crate::common::models::{ApiStatus, ErrorResponse as CommonErrorResponse};
+// #[derive(Deserialize)]
+// pub struct ErrorDetails {
+//     title: String,
+//     detail: String,
+//     // #[serde(rename = "isRetryable")]
+//     // is_retryable: Option<bool>,
+// }
 
 impl ChatError {
-    pub fn to_error_response(&self) -> ErrorResponse {
+    pub fn to_error_response(self) -> ErrorResponse {
         if self.error.details.is_empty() {
             return ErrorResponse {
                 status: 500,
@@ -49,69 +50,31 @@ impl ChatError {
                 error: None,
             };
         }
+
+        let error_details = self.error.details.first().and_then(|detail| {
+            STANDARD_NO_PAD
+                .decode(&detail.value)
+                .ok()
+                .map(bytes::Bytes::from)
+                .and_then(|buf| ErrorDetails::decode(buf).ok())
+        });
+
+        let status = error_details
+            .as_ref()
+            .map(|details| details.status_code())
+            .unwrap_or(500);
+
         ErrorResponse {
-            status: self.status_code(),
-            code: self.error.code.clone(),
-            error: Some(Error {
-                message: self.error.details[0].debug.details.title.clone(),
-                details: self.error.details[0].debug.details.detail.clone(),
-                value: self.error.details[0].value.clone(),
-            }),
+            status,
+            code: self.error.code,
+            error: error_details
+                .and_then(|details| details.details)
+                .map(|custom_details| Error {
+                    message: custom_details.title,
+                    details: custom_details.detail,
+                }),
         }
     }
-
-    pub fn status_code(&self) -> u16 {
-        match ErrorType::from_str_name(&self.error.details[0].debug.error) {
-            Some(error) => match error {
-                ErrorType::Unspecified => 500,
-                ErrorType::BadApiKey
-                | ErrorType::InvalidAuthId
-                | ErrorType::AuthTokenNotFound
-                | ErrorType::AuthTokenExpired
-                | ErrorType::Unauthorized => 401,
-                ErrorType::NotLoggedIn
-                | ErrorType::NotHighEnoughPermissions
-                | ErrorType::AgentRequiresLogin
-                | ErrorType::ProUserOnly
-                | ErrorType::TaskNoPermissions => 403,
-                ErrorType::NotFound
-                | ErrorType::UserNotFound
-                | ErrorType::TaskUuidNotFound
-                | ErrorType::AgentEngineNotFound
-                | ErrorType::GitgraphNotFound
-                | ErrorType::FileNotFound => 404,
-                ErrorType::FreeUserRateLimitExceeded
-                | ErrorType::ProUserRateLimitExceeded
-                | ErrorType::OpenaiRateLimitExceeded
-                | ErrorType::OpenaiAccountLimitExceeded
-                | ErrorType::GenericRateLimitExceeded
-                | ErrorType::Gpt4VisionPreviewRateLimit
-                | ErrorType::ApiKeyRateLimit => 429,
-                ErrorType::BadRequest
-                | ErrorType::BadModelName
-                | ErrorType::SlashEditFileTooLong
-                | ErrorType::FileUnsupported
-                | ErrorType::ClaudeImageTooLarge => 400,
-                ErrorType::Deprecated
-                | ErrorType::FreeUserUsageLimit
-                | ErrorType::ProUserUsageLimit
-                | ErrorType::ResourceExhausted
-                | ErrorType::Openai
-                | ErrorType::MaxTokens
-                | ErrorType::ApiKeyNotSupported
-                | ErrorType::UserAbortedRequest
-                | ErrorType::CustomMessage
-                | ErrorType::OutdatedClient
-                | ErrorType::Debounced
-                | ErrorType::RepositoryServiceRepositoryIsNotInitialized => 500,
-            },
-            None => 500,
-        }
-    }
-
-    // pub fn is_expected(&self) -> bool {
-    //     self.error.details[0].debug.is_expected.unwrap_or_default()
-    // }
 }
 
 #[derive(Serialize)]
@@ -126,7 +89,7 @@ pub struct ErrorResponse {
 pub struct Error {
     pub message: String,
     pub details: String,
-    pub value: String,
+    // pub value: String,
 }
 
 impl ErrorResponse {
@@ -135,18 +98,25 @@ impl ErrorResponse {
     // }
 
     pub fn status_code(&self) -> StatusCode {
-        StatusCode::from_u16(self.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+        StatusCode::from_u16(self.status).unwrap()
     }
 
     pub fn native_code(&self) -> String {
-        self.code.replace("_", " ")
+        self.error.as_ref().map_or_else(
+            || self.code.replace("_", " "),
+            |error| error.message.clone(),
+        )
     }
 
     pub fn to_common(self) -> CommonErrorResponse {
         CommonErrorResponse {
             status: ApiStatus::Error,
             code: Some(self.status),
-            error: self.error.as_ref().map(|error| error.message.clone()).or(Some(self.code.clone())),
+            error: self
+                .error
+                .as_ref()
+                .map(|error| error.message.clone())
+                .or(Some(self.code.clone())),
             message: self.error.as_ref().map(|error| error.details.clone()),
         }
     }
@@ -161,7 +131,7 @@ pub enum StreamError {
 impl std::fmt::Display for StreamError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            StreamError::ChatError(error) => write!(f, "{}", error.error.details[0].debug.details.title),
+            StreamError::ChatError(error) => write!(f, "{}", error.error.code),
             StreamError::DataLengthLessThan5 => write!(f, "data length less than 5"),
             StreamError::EmptyMessage => write!(f, "empty message"),
         }

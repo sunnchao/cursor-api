@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/x-icon" href="data:image/x-icon;,">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Token 信息管理</title>
+  <!-- 引入共享样式 -->
+  <link rel="stylesheet" href="/static/shared-styles.css">
+  <script src="/static/shared.js"></script>
+  <style>
+    .token-container {
+      display: grid;
+      gap: var(--spacing);
+    }
+
+    .token-section {
+      background: var(--card-background);
+      padding: var(--spacing);
+      border-radius: var(--border-radius);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .shortcuts {
+      margin-top: var(--spacing);
+      padding: 12px;
+      background: var(--disabled-bg);
+      border-radius: 4px;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    kbd {
+      background: var(--card-background);
+      border-radius: 3px;
+      border: 1px solid var(--border-color);
+      padding: 1px 4px;
+      font-size: 12px;
+      color: var(--text-primary);
+    }
+
+    .token-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0;
+      background: var(--card-background);
+    }
+
+    .token-table th,
+    .token-table td {
+      padding: 8px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .token-table th {
+      background: var(--disabled-bg);
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .token-list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .token-list-header button {
+      padding: 4px 12px;
+      font-size: 14px;
+    }
+
+    /* Token表格样式优化 */
+    .token-table td {
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text-primary);
+    }
+
+    .token-table tr:hover {
+      background: var(--primary-color-alpha);
+    }
+
+    .token-table tr:hover td {
+      white-space: normal;
+      word-break: break-all;
+    }
+
+    /* 操作按钮样式 */
+    .action-cell {
+      width: 100px;
+      text-align: center !important;
+    }
+
+    .action-cell button {
+      padding: 2px 8px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    /* 提示框样式 */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--card-background);
+      padding: 20px;
+      border-radius: var(--border-radius);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+      width: 90%;
+      max-width: 500px;
+      color: var(--text-primary);
+    }
+
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+    }
+
+    .modal-header {
+      margin-bottom: 15px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 10px;
+    }
+
+    .modal-header h3 {
+      margin: 0;
+      color: var(--text-primary);
+    }
+
+    .modal-footer {
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid var(--border-color);
+      text-align: right;
+    }
+
+    /* 复选框容器样式 */
+    .checkbox-container {
+      margin: 8px 0;
+    }
+
+    .checkbox-container label {
+      display: inline;
+      margin-left: 8px;
+      color: var(--text-primary);
+    }
+
+    /* 帮助文本样式 */
+    .help-text {
+      color: var(--text-secondary);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .modal {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+
+      .token-table tr:hover {
+        background: rgba(144, 202, 249, 0.1);
+        /* --primary-color in dark mode */
+      }
+    }
+
+    /* Key结果样式 */
+    .key-result {
+      background: var(--card-background);
+      padding: var(--spacing);
+      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+      margin-top: var(--spacing);
+      position: relative;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .key-result:hover {
+      background: var(--primary-color-alpha);
+      border-color: var(--primary-color);
+    }
+
+    .key-result:active {
+      transform: translateY(1px);
+    }
+
+    .key-content {
+      overflow-x: auto;
+      white-space: nowrap;
+      scrollbar-width: thin;
+      /* Firefox */
+      -ms-overflow-style: none;
+      /* IE and Edge */
+    }
+
+    /* Webkit浏览器的滚动条样式 */
+    .key-content::-webkit-scrollbar {
+      height: 6px;
+    }
+
+    .key-content::-webkit-scrollbar-track {
+      background: var(--disabled-bg);
+      border-radius: 3px;
+    }
+
+    .key-content::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 3px;
+    }
+
+    .key-content::-webkit-scrollbar-thumb:hover {
+      background: var(--text-secondary);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .key-content::-webkit-scrollbar-track {
+        background: var(--card-background);
+      }
+
+      .key-content::-webkit-scrollbar-thumb {
+        background: var(--text-secondary);
+      }
+
+      .key-content::-webkit-scrollbar-thumb:hover {
+        background: var(--text-primary);
+      }
+    }
+
+    .model-list {
+      max-height: 150px;
+      overflow-y: auto;
+      padding: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      margin-top: 8px;
+      background: var(--card-background);
+    }
+
+    .model-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .model-item input[type="checkbox"] {
+      margin-right: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Token 信息管理</h1>
+
+  <div class="container">
+    <div class="form-group">
+      <label>认证令牌:</label>
+      <input type="password" id="authToken" placeholder="输入 AUTH_TOKEN">
+    </div>
+  </div>
+
+  <div class="token-container">
+    <div class="token-section">
+      <h3>Token 管理</h3>
+      <div class="button-group">
+        <button onclick="getTokenInfo()">获取当前配置</button>
+        <button onclick="addTokens()" class="secondary">添加Token</button>
+        <button onclick="deleteTokens()" class="danger">删除Token</button>
+      </div>
+
+      <div class="form-group">
+        <label>Token 操作:</label>
+        <textarea id="tokenInput" placeholder="每行一个 token"></textarea>
+        <div class="help-text">添加模式: 输入要添加的token，每行一个
+          删除模式: 输入要删除的token，每行一个</div>
+      </div>
+
+      <div class="form-group">
+        <div class="token-list-header">
+          <label>当前Token列表:</label>
+          <button onclick="copyTokenList()" class="secondary">复制列表</button>
+        </div>
+        <table class="token-table">
+          <thead>
+            <tr>
+              <th>Token</th>
+              <th>Checksum</th>
+              <th class="action-cell">操作</th>
+            </tr>
+          </thead>
+          <tbody id="tokenTableBody">
+          </tbody>
+        </table>
+      </div>
+
+      <div class="shortcuts">
+        快捷键: <kbd>Ctrl</kbd> + <kbd>Enter</kbd> 执行当前操作
+      </div>
+    </div>
+  </div>
+
+  <div id="message"></div>
+
+  <!-- 动态key生成对话框 -->
+  <div class="modal-backdrop" id="keyModal-backdrop" onclick="closeKeyModal()"></div>
+  <div class="modal" id="keyModal">
+    <div class="modal-header">
+      <h3>生成动态Key</h3>
+    </div>
+    <div class="form-group">
+      <label>流第一个块检查:</label>
+      <select id="enableStreamCheck">
+        <option value="">跟随全局</option>
+        <option value="true">启用</option>
+        <option value="false">禁用</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>包含停止流:</label>
+      <select id="includeStopStream">
+        <option value="">跟随全局</option>
+        <option value="true">启用</option>
+        <option value="false">禁用</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>图片处理能力:</label>
+      <select id="disableVision">
+        <option value="">跟随全局</option>
+        <option value="true">禁用</option>
+        <option value="false">启用</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>慢速池:</label>
+      <select id="enableSlowPool">
+        <option value="">跟随全局</option>
+        <option value="true">启用</option>
+        <option value="false">禁用</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>使用量检查模型规则:</label>
+      <select id="usageCheckType" onchange="toggleModelList()">
+        <option value="">跟随全局</option>
+        <option value="default">默认</option>
+        <option value="disabled">禁用</option>
+        <option value="all">所有</option>
+        <option value="custom">自定义</option>
+      </select>
+      <div id="modelListContainer" class="model-list" style="display: none;">
+        <!-- 模型列表将通过 JavaScript 动态填充 -->
+      </div>
+    </div>
+    <div class="key-result" id="keyResult" style="display: none;" onclick="copyGeneratedKey()">
+      <div class="key-content" id="keyContent"></div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeKeyModal()" class="secondary">取消</button>
+      <button onclick="generateKey()" class="primary">生成</button>
+    </div>
+  </div>
+
+  <script>
+    async function getTokenInfo() {
+      const data = await makeAuthenticatedRequest('/tokens/get');
+      if (data) {
+        const tableBody = document.getElementById('tokenTableBody');
+        tableBody.innerHTML = data.tokens.map(t => `<tr><td title="${t.token}">${t.token}</td><td title="${t.checksum}">${t.checksum}</td><td class="action-cell"><button onclick="showKeyModal('${t.token}','${t.checksum}')" class="secondary">生成Key</button></td></tr>`).join('');
+        showGlobalMessage('配置获取成功');
+      }
+    }
+
+    function copyTokenList() {
+      const tableBody = document.getElementById('tokenTableBody');
+      const rows = tableBody.getElementsByTagName('tr');
+      const tokenList = Array.from(rows).map(row => {
+        const token = row.cells[0].textContent;
+        const checksum = row.cells[1].textContent;
+        return `${token},${checksum}`;
+      }).join('\n');
+
+      navigator.clipboard.writeText(tokenList).then(() => {
+        showGlobalMessage('Token列表已复制到剪贴板');
+      }).catch(err => {
+        showGlobalMessage('复制失败: ' + err, true);
+      });
+    }
+
+    async function addTokens() {
+      const tokensInput = document.getElementById('tokenInput').value;
+
+      if (!tokensInput) {
+        showGlobalMessage('请输入要添加的Token', true);
+        return;
+      }
+
+      // 处理输入的tokens，跳过空行和注释，解析token和checksum
+      const tokenList = tokensInput.split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'))
+        .map(line => {
+          const parts = line.includes(',') ? line.split(',') : [line];
+          return {
+            token: parts[0].trim(),
+            checksum: parts[1]?.trim() || null
+          };
+        });
+
+      if (tokenList.length === 0) {
+        showGlobalMessage('没有有效的Token输入', true);
+        return;
+      }
+
+      const data = await makeAuthenticatedRequest('/tokens/add', {
+        body: JSON.stringify(tokenList)
+      });
+
+      if (data) {
+        showGlobalMessage(`添加成功: ${data.message}`);
+        document.getElementById('tokenInput').value = '';
+        getTokenInfo(); // 刷新当前配置
+      }
+    }
+
+    async function deleteTokens() {
+      const tokensToDelete = document.getElementById('tokenInput').value;
+
+      if (!tokensToDelete) {
+        showGlobalMessage('请输入要删除的Token', true);
+        return;
+      }
+
+      const tokens = tokensToDelete.trim().split('\n').filter(t => t);
+
+      const data = await makeAuthenticatedRequest('/tokens/delete', {
+        body: JSON.stringify({
+          tokens: tokens,
+          expectation: 'detailed'
+        })
+      });
+
+      if (data) {
+        let message = '删除操作完成\n';
+        if (data.failed_tokens?.length) {
+          message += `\n未找到的Token: ${data.failed_tokens.join('\n')}`;
+        }
+        if (data.updated_tokens?.length) {
+          message += `\n剩余Token: ${data.updated_tokens.join('\n')}`;
+        }
+        showGlobalMessage(message, timeout = 30000);
+        document.getElementById('tokenInput').value = '';
+        getTokenInfo();
+      }
+    }
+
+    // 动态key相关函数
+    let availableModels = [];
+    let currentToken = '';
+    let currentChecksum = '';
+
+    async function getModels() {
+      try {
+        const response = await fetch('/v1/models');
+        const data = await response.json();
+        availableModels = data.data.map(model => model.id);
+        updateModelList();
+      } catch (error) {
+        showGlobalMessage('获取模型列表失败', true);
+      }
+    }
+
+    function updateModelList() {
+      const container = document.getElementById('modelListContainer');
+      container.innerHTML = availableModels.map(model => `<div class="model-item"><input type="checkbox" id="model_${model}" value="${model}"><label for="model_${model}">${model}</label></div>`).join('');
+    }
+
+    function toggleModelList() {
+      const type = document.getElementById('usageCheckType').value;
+      const container = document.getElementById('modelListContainer');
+      container.style.display = type === 'custom' ? 'block' : 'none';
+    }
+
+    function showKeyModal(token, checksum) {
+      currentToken = token;
+      currentChecksum = checksum;
+
+      const modal = document.getElementById('keyModal');
+      const backdrop = document.getElementById('keyModal-backdrop');
+
+      modal.style.display = 'block';
+      backdrop.style.display = 'block';
+      document.getElementById('keyResult').style.display = 'none';
+
+      // 添加点击事件处理
+      modal.addEventListener('click', function (event) {
+        event.stopPropagation();  // 防止点击modal内部时触发backdrop的点击事件
+      });
+
+      // 重置所有选项
+      document.getElementById('enableStreamCheck').value = '';
+      document.getElementById('includeStopStream').value = '';
+      document.getElementById('disableVision').value = '';
+      document.getElementById('enableSlowPool').value = '';
+      document.getElementById('usageCheckType').value = '';
+      document.getElementById('modelListContainer').style.display = 'none';
+    }
+
+    function closeKeyModal() {
+      document.getElementById('keyModal').style.display = 'none';
+      document.getElementById('keyModal-backdrop').style.display = 'none';
+    }
+
+    function parseBooleanFromString(value, defaultValue) {
+      if (value === '') return defaultValue;
+      return value === 'true';
+    }
+
+    async function generateKey() {
+      const type = document.getElementById('usageCheckType').value;
+      let modelIds = '';
+      if (type === 'custom') {
+        modelIds = Array.from(document.querySelectorAll('#modelListContainer input:checked'))
+          .map(input => input.value)
+          .join(',');
+      }
+
+      const payload = {
+        auth_token: `${currentToken},${currentChecksum}`,
+        enable_stream_check: parseBooleanFromString(document.getElementById('enableStreamCheck').value, undefined),
+        include_stop_stream: parseBooleanFromString(document.getElementById('includeStopStream').value, undefined),
+        disable_vision: parseBooleanFromString(document.getElementById('disableVision').value, undefined),
+        enable_slow_pool: parseBooleanFromString(document.getElementById('enableSlowPool').value, undefined),
+        usage_check_models: type ? {
+          type: type,
+          model_ids: type === 'custom' ? modelIds : undefined
+        } : undefined
+      };
+
+      const data = await makeAuthenticatedRequest('/build-key', {
+        body: JSON.stringify(payload)
+      });
+
+      if (data && data.key) {
+        const keyResult = document.getElementById('keyResult');
+        const keyContent = document.getElementById('keyContent');
+        keyContent.textContent = data.key;
+        keyResult.style.display = 'block';
+        showGlobalMessage('动态Key已生成，点击复制');
+      }
+    }
+
+    function copyGeneratedKey(event) {
+      // 防止触发滚动条点击事件
+      if (event && event.target.classList.contains('key-content') && event.offsetX > event.target.clientWidth) {
+        return;
+      }
+
+      const keyContent = document.getElementById('keyContent').textContent;
+      navigator.clipboard.writeText(keyContent).then(() => {
+        showGlobalMessage('Key已复制到剪贴板');
+      }).catch(() => {
+        showGlobalMessage('复制失败', true);
+      });
+    }
+
+    // 快捷键支持
+    document.addEventListener('keydown', function (e) {
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        const activeElement = document.activeElement;
+        if (activeElement.id === 'tokenInput') {
+          // 根据当前焦点确定操作
+          const action = document.querySelector('.button-group button.active');
+          if (action) {
+            action.click();
+          }
+        }
+      }
+    });
+
+    // 初始化 token 处理
+    initializeTokenHandling('authToken');
+
+    // 页面加载完成后获取当前配置和模型列表
+    document.addEventListener('DOMContentLoaded', () => {
+      getModels();
+      getTokenInfo();
+    });
+  </script>
+</body>
+
+</html>

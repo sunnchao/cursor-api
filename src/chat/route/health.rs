@@ -3,17 +3,18 @@ use crate::{
         constant::{
             AUTHORIZATION_BEARER_PREFIX, CONTENT_TYPE_TEXT_HTML_WITH_UTF8,
             CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8, PKG_VERSION, ROUTE_ABOUT_PATH, ROUTE_API_PATH,
-            ROUTE_BASIC_CALIBRATION_PATH, ROUTE_CONFIG_PATH, ROUTE_ENV_EXAMPLE_PATH,
-            ROUTE_GET_CHECKSUM, ROUTE_GET_HASH, ROUTE_GET_TIMESTAMP_HEADER,
-            ROUTE_GET_TOKENINFO_PATH, ROUTE_HEALTH_PATH, ROUTE_LOGS_PATH, ROUTE_README_PATH,
-            ROUTE_ROOT_PATH, ROUTE_STATIC_PATH, ROUTE_TOKENINFO_PATH, ROUTE_UPDATE_TOKENINFO_PATH,
+            ROUTE_BASIC_CALIBRATION_PATH, ROUTE_BUILD_KEY_PATH, ROUTE_CONFIG_PATH,
+            ROUTE_ENV_EXAMPLE_PATH, ROUTE_GET_CHECKSUM, ROUTE_GET_HASH, ROUTE_GET_TIMESTAMP_HEADER,
+            ROUTE_HEALTH_PATH, ROUTE_LOGS_PATH, ROUTE_README_PATH, ROUTE_ROOT_PATH,
+            ROUTE_STATIC_PATH, ROUTE_TOKENS_ADD_PATH, ROUTE_TOKENS_DELETE_PATH,
+            ROUTE_TOKENS_GET_PATH, ROUTE_TOKENS_PATH, ROUTE_TOKENS_UPDATE_PATH,
             ROUTE_USER_INFO_PATH,
         },
         lazy::{get_start_time, AUTH_TOKEN, ROUTE_CHAT_PATH, ROUTE_MODELS_PATH},
         model::{AppConfig, AppState, PageContent},
     },
     chat::constant::AVAILABLE_MODELS,
-    common::models::{
+    common::model::{
         health::{CpuInfo, HealthCheckResponse, MemoryInfo, SystemInfo, SystemStats},
         ApiStatus,
     },
@@ -116,9 +117,11 @@ pub async fn handle_health(
         endpoints: vec![
             ROUTE_CHAT_PATH.as_str(),
             ROUTE_MODELS_PATH.as_str(),
-            ROUTE_TOKENINFO_PATH,
-            ROUTE_UPDATE_TOKENINFO_PATH,
-            ROUTE_GET_TOKENINFO_PATH,
+            ROUTE_TOKENS_PATH,
+            ROUTE_TOKENS_GET_PATH,
+            ROUTE_TOKENS_UPDATE_PATH,
+            ROUTE_TOKENS_ADD_PATH,
+            ROUTE_TOKENS_DELETE_PATH,
             ROUTE_LOGS_PATH,
             ROUTE_ENV_EXAMPLE_PATH,
             ROUTE_CONFIG_PATH,
@@ -131,6 +134,7 @@ pub async fn handle_health(
             ROUTE_GET_TIMESTAMP_HEADER,
             ROUTE_BASIC_CALIBRATION_PATH,
             ROUTE_USER_INFO_PATH,
+            ROUTE_BUILD_KEY_PATH,
         ],
     })
 }

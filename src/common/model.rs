@@ -1,6 +1,7 @@
 pub mod error;
 pub mod health;
 pub mod config;
+pub mod token;
 pub mod userinfo;
 
 use config::ConfigData;
@@ -48,12 +49,12 @@ impl std::fmt::Display for NormalResponse<ConfigData> {
     }
 }
 
-#[derive(Serialize)]
-pub struct NormalResponseNoData {
-    pub status: ApiStatus,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
-}
+// #[derive(Serialize)]
+// pub struct NormalResponseNoData {
+//     pub status: ApiStatus,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub message: Option<String>,
+// }
 
 #[derive(Serialize)]
 pub struct ErrorResponse {

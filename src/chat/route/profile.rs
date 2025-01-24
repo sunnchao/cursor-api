@@ -1,10 +1,10 @@
 use crate::{
     chat::constant::ERR_NODATA,
-    common::{models::userinfo::GetUserInfo, utils::{extract_token, get_token_profile}},
+    common::{model::userinfo::GetUserInfo, utils::{extract_token, get_token_profile}},
 };
 use axum::Json;
 
-use super::token::TokenRequest;
+use super::tokens::TokenRequest;
 
 pub async fn handle_user_info(Json(request): Json<TokenRequest>) -> Json<GetUserInfo> {
     let auth_token = match request.token {
