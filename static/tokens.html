@@ -603,6 +603,15 @@
       document.getElementById('includeWebReferences').value = '';
     }
 
+    async function getKeyUsage(token, checksum) {
+      const data = await makeAuthenticatedRequest('/userinfo', {
+        body: JSON.stringify({
+          token: `${token}`
+        })
+      });
+      console.log(data);
+    }
+
     function closeKeyModal() {
       document.getElementById('keyModal').style.display = 'none';
       document.getElementById('keyModal-backdrop').style.display = 'none';
