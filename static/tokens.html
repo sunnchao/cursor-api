@@ -91,7 +91,8 @@
 
     /* 操作按钮样式 */
     .action-cell {
-      width: 100px;
+      width: 160px;
+      /* 增加宽度以容纳两个按钮 */
       text-align: center !important;
     }
 
@@ -99,6 +100,8 @@
       padding: 2px 8px;
       font-size: 12px;
       white-space: nowrap;
+      margin: 0 2px;
+      /* 添加按钮间距 */
     }
 
     /* 提示框样式 */
@@ -256,6 +259,21 @@
     .model-item input[type="checkbox"] {
       margin-right: 8px;
     }
+
+    /* 确认对话框的额外样式 */
+    #confirmModal {
+      max-width: 400px;
+    }
+
+    #confirmModal .modal-content {
+      margin: 20px 0;
+      text-align: center;
+    }
+
+    #confirmModal .modal-footer button {
+      min-width: 80px;
+      margin-left: 10px;
+    }
   </style>
 </head>
 
@@ -274,6 +292,7 @@
       <h3>Token 管理</h3>
       <div class="button-group">
         <button onclick="getTokenInfo()">获取当前配置</button>
+        <button onclick="reloadTokens()" class="secondary">重载Token</button>
         <button onclick="addTokens()" class="secondary">添加Token</button>
         <button onclick="deleteTokens()" class="danger">删除Token</button>
       </div>
@@ -295,6 +314,10 @@
             <tr>
               <th>Token</th>
               <th>Checksum</th>
+              <th>邮箱</th>
+              <th>会员类型</th>
+              <th>Premium用量</th>
+              <th>试用剩余</th>
               <th class="action-cell">操作</th>
             </tr>
           </thead>
@@ -316,22 +339,6 @@
   <div class="modal" id="keyModal">
     <div class="modal-header">
       <h3>生成动态Key</h3>
-    </div>
-    <div class="form-group">
-      <label>流第一个块检查:</label>
-      <select id="enableStreamCheck">
-        <option value="">跟随全局</option>
-        <option value="true">启用</option>
-        <option value="false">禁用</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>包含停止流:</label>
-      <select id="includeStopStream">
-        <option value="">跟随全局</option>
-        <option value="true">启用</option>
-        <option value="false">禁用</option>
-      </select>
     </div>
     <div class="form-group">
       <label>图片处理能力:</label>
@@ -362,6 +369,14 @@
         <!-- 模型列表将通过 JavaScript 动态填充 -->
       </div>
     </div>
+    <div class="form-group">
+      <label>包含网络引用:</label>
+      <select id="includeWebReferences">
+        <option value="">跟随全局</option>
+        <option value="true">启用</option>
+        <option value="false">禁用</option>
+      </select>
+    </div>
     <div class="key-result" id="keyResult" style="display: none;" onclick="copyGeneratedKey()">
       <div class="key-content" id="keyContent"></div>
     </div>
@@ -371,12 +386,35 @@
     </div>
   </div>
 
+  <!-- 添加确认对话框 -->
+  <div class="modal-backdrop" id="confirmModal-backdrop"></div>
+  <div class="modal" id="confirmModal">
+    <div class="modal-header">
+      <h3>确认删除</h3>
+    </div>
+    <div class="modal-content">
+      <p>确定要删除这个token吗？</p>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeConfirmModal()" class="secondary">取消</button>
+      <button onclick="confirmDelete()" class="danger">删除</button>
+    </div>
+  </div>
+
   <script>
     async function getTokenInfo() {
       const data = await makeAuthenticatedRequest('/tokens/get');
       if (data) {
         const tableBody = document.getElementById('tokenTableBody');
-        tableBody.innerHTML = data.tokens.map(t => `<tr><td title="${t.token}">${t.token}</td><td title="${t.checksum}">${t.checksum}</td><td class="action-cell"><button onclick="showKeyModal('${t.token}','${t.checksum}')" class="secondary">生成Key</button></td></tr>`).join('');
+        tableBody.innerHTML = data.tokens.map(t => {
+          const profile = t.profile || {};
+          const user = profile.user || {};
+          const stripe = profile.stripe || {};
+          const usage = profile.usage || {};
+          const premium = usage.premium || {};
+
+          return `<tr><td title="${t.token}">${t.token}</td><td title="${t.checksum}">${t.checksum}</td><td>${user.email || '-'}</td><td>${formatMembershipType(stripe.membership_type)}</td><td>${premium.requests || 0}/${premium.max_requests || '∞'}</td><td>${stripe.days_remaining_on_trial > 0 ? `${stripe.days_remaining_on_trial}天` : '-'}</td><td class="action-cell"><button onclick="showKeyModal('${t.token}','${t.checksum}')" class="secondary">生成Key</button><button onclick="deleteToken('${t.token}')" class="danger">删除</button></td></tr>`;
+        }).join('');
         showGlobalMessage('配置获取成功');
       }
     }
@@ -395,6 +433,14 @@
       }).catch(err => {
         showGlobalMessage('复制失败: ' + err, true);
       });
+    }
+
+    async function reloadTokens() {
+      const data = await makeAuthenticatedRequest('/tokens/reload');
+      if (data) {
+        showGlobalMessage(`Token重载成功: ${data.message}`);
+        getTokenInfo(); // 刷新当前配置
+      }
     }
 
     async function addTokens() {
@@ -464,6 +510,48 @@
       }
     }
 
+    // 添加删除单个token的函数
+    let tokenToDelete = null;
+
+    function showConfirmModal(token) {
+      tokenToDelete = token;
+      const modal = document.getElementById('confirmModal');
+      const backdrop = document.getElementById('confirmModal-backdrop');
+      modal.style.display = 'block';
+      backdrop.style.display = 'block';
+    }
+
+    function closeConfirmModal() {
+      const modal = document.getElementById('confirmModal');
+      const backdrop = document.getElementById('confirmModal-backdrop');
+      modal.style.display = 'none';
+      backdrop.style.display = 'none';
+      tokenToDelete = null;
+    }
+
+    async function confirmDelete() {
+      if (!tokenToDelete) return;
+
+      const data = await makeAuthenticatedRequest('/tokens/delete', {
+        body: JSON.stringify({
+          tokens: [tokenToDelete],
+          expectation: 'detailed'
+        })
+      });
+
+      if (data) {
+        showGlobalMessage('Token删除成功');
+        getTokenInfo();
+      }
+
+      closeConfirmModal();
+    }
+
+    // 修改deleteToken函数
+    function deleteToken(token) {
+      showConfirmModal(token);
+    }
+
     // 动态key相关函数
     let availableModels = [];
     let currentToken = '';
@@ -508,12 +596,11 @@
       });
 
       // 重置所有选项
-      document.getElementById('enableStreamCheck').value = '';
-      document.getElementById('includeStopStream').value = '';
       document.getElementById('disableVision').value = '';
       document.getElementById('enableSlowPool').value = '';
       document.getElementById('usageCheckType').value = '';
       document.getElementById('modelListContainer').style.display = 'none';
+      document.getElementById('includeWebReferences').value = '';
     }
 
     function closeKeyModal() {
@@ -537,14 +624,13 @@
 
       const payload = {
         auth_token: `${currentToken},${currentChecksum}`,
-        enable_stream_check: parseBooleanFromString(document.getElementById('enableStreamCheck').value, undefined),
-        include_stop_stream: parseBooleanFromString(document.getElementById('includeStopStream').value, undefined),
         disable_vision: parseBooleanFromString(document.getElementById('disableVision').value, undefined),
         enable_slow_pool: parseBooleanFromString(document.getElementById('enableSlowPool').value, undefined),
         usage_check_models: type ? {
           type: type,
           model_ids: type === 'custom' ? modelIds : undefined
-        } : undefined
+        } : undefined,
+        include_web_references: parseBooleanFromString(document.getElementById('includeWebReferences').value, undefined)
       };
 
       const data = await makeAuthenticatedRequest('/build-key', {

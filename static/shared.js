@@ -1,10 +1,19 @@
 // Token 管理功能
+/**
+ * 保存认证令牌到本地存储
+ * @param {string} token - 要保存的认证令牌
+ * @returns {void}
+ */
 function saveAuthToken(token) {
   const expiryTime = new Date().getTime() + (24 * 60 * 60 * 1000); // 24小时后过期
   localStorage.setItem('authToken', token);
   localStorage.setItem('authTokenExpiry', expiryTime);
 }
 
+/**
+ * 获取存储的认证令牌
+ * @returns {string|null} 如果令牌有效则返回令牌，否则返回 null
+ */
 function getAuthToken() {
   const token = localStorage.getItem('authToken');
   const expiry = localStorage.getItem('authTokenExpiry');
@@ -23,6 +32,13 @@ function getAuthToken() {
 }
 
 // 消息显示功能
+/**
+ * 在指定元素中显示消息
+ * @param {string} elementId - 目标元素的 ID
+ * @param {string} text - 要显示的消息文本
+ * @param {boolean} [isError=false] - 是否为错误消息
+ * @returns {void}
+ */
 function showMessage(elementId, text, isError = false) {
   let msg = document.getElementById(elementId);
 
@@ -38,6 +54,10 @@ function showMessage(elementId, text, isError = false) {
 }
 
 // 确保消息容器存在
+/**
+ * 确保消息容器存在于 DOM 中
+ * @returns {HTMLElement} 消息容器元素
+ */
 function ensureMessageContainer() {
   let container = document.querySelector('.message-container');
   if (!container) {
@@ -48,6 +68,13 @@ function ensureMessageContainer() {
   return container;
 }
 
+/**
+ * 显示全局消息提示
+ * @param {string} text - 要显示的消息文本
+ * @param {boolean} [isError=false] - 是否为错误消息
+ * @param {number} [timeout=3000] - 消息显示时长（毫秒）
+ * @returns {void}
+ */
 function showGlobalMessage(text, isError = false, timeout = 3000) {
   const container = ensureMessageContainer();
 
@@ -268,5 +295,29 @@ function showPromptModal(promptStr) {
   } catch (e) {
     console.error('显示prompt对话框失败:', e);
     console.error('原始prompt:', promptStr);
+  }
+}
+
+/**
+ * 将会员类型代码转换为显示名称
+ * @param {string|null} type - 会员类型代码,如 'free_trial', 'pro', 'free', 'enterprise' 等
+ * @returns {string} 格式化后的会员类型显示名称
+ * @example
+ * formatMembershipType('free_trial') // 返回 'Pro Trial'
+ * formatMembershipType('pro') // 返回 'Pro'
+ * formatMembershipType(null) // 返回 '-'
+ * formatMembershipType('custom_type') // 返回 'Custom Type'
+ */
+function formatMembershipType(type) {
+  if (!type) return '-';
+  switch (type) {
+    case 'free_trial': return 'Pro Trial';
+    case 'pro': return 'Pro';
+    case 'free': return 'Free';
+    case 'enterprise': return 'Business';
+    default: return type
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   }
 }

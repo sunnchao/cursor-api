@@ -76,24 +76,6 @@
     </div>
 
     <div class="form-group">
-      <label>流第一个块检查:</label>
-      <select id="enableStreamCheck">
-        <option value="">跟随全局</option>
-        <option value="true">启用</option>
-        <option value="false">禁用</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label>包含停止流:</label>
-      <select id="includeStopStream">
-        <option value="">跟随全局</option>
-        <option value="true">启用</option>
-        <option value="false">禁用</option>
-      </select>
-    </div>
-
-    <div class="form-group">
       <label>图片处理能力:</label>
       <select id="disableVision">
         <option value="">跟随全局</option>
@@ -123,6 +105,15 @@
       <div id="modelListContainer" class="model-list" style="display: none;">
         <!-- 模型列表将通过 JavaScript 动态填充 -->
       </div>
+    </div>
+
+    <div class="form-group">
+      <label>包含网络引用:</label>
+      <select id="includeWebReferences">
+        <option value="">跟随全局</option>
+        <option value="true">启用</option>
+        <option value="false">禁用</option>
+      </select>
     </div>
 
     <div class="button-group">
@@ -187,14 +178,13 @@
 
       const data = {
         auth_token: dataToken,
-        enable_stream_check: parseBooleanFromString(document.getElementById('enableStreamCheck').value, undefined),
-        include_stop_stream: parseBooleanFromString(document.getElementById('includeStopStream').value, undefined),
         disable_vision: parseBooleanFromString(document.getElementById('disableVision').value, undefined),
         enable_slow_pool: parseBooleanFromString(document.getElementById('enableSlowPool').value, undefined),
         usage_check_models: type ? {
           type: type,
           model_ids: type === 'custom' ? modelIds : undefined
-        } : undefined
+        } : undefined,
+        include_web_references: parseBooleanFromString(document.getElementById('includeWebReferences').value, undefined)
       };
 
       try {
@@ -227,11 +217,10 @@
     function clearForm() {
       document.getElementById('authToken').value = '';
       document.getElementById('dataToken').value = '';
-      document.getElementById('enableStreamCheck').value = '';
-      document.getElementById('includeStopStream').value = '';
       document.getElementById('disableVision').value = '';
       document.getElementById('enableSlowPool').value = '';
       document.getElementById('usageCheckType').value = 'default';
+      document.getElementById('includeWebReferences').value = '';
       document.getElementById('modelListContainer').style.display = 'none';
       document.getElementById('keyResult').style.display = 'none';
       showGlobalMessage('表单已清空');

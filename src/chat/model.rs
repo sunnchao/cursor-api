@@ -86,8 +86,8 @@ pub struct Model {
     pub owned_by: &'static str,
 }
 
-use crate::app::model::{AppConfig, UsageCheck};
 use super::constant::USAGE_CHECK_MODELS;
+use crate::app::model::{AppConfig, UsageCheck};
 
 impl Model {
     pub fn is_usage_check(&self, usage_check: Option<UsageCheck>) -> bool {

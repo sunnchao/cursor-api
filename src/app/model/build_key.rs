@@ -4,23 +4,15 @@ use crate::{app::constant::COMMA, chat::constant::AVAILABLE_MODELS};
 
 #[derive(Deserialize)]
 pub struct BuildKeyRequest {
-    // 认证令牌(必需)
     pub auth_token: String,
-    // 流第一个块检查
-    #[serde(default)]
-    pub enable_stream_check: Option<bool>,
-    // 包含停止流
-    #[serde(default)]
-    pub include_stop_stream: Option<bool>,
-    // 是否禁用图片处理能力
     #[serde(default)]
     pub disable_vision: Option<bool>,
-    // 慢速池
     #[serde(default)]
     pub enable_slow_pool: Option<bool>,
-    // 使用量检查模型规则
     #[serde(default)]
     pub usage_check_models: Option<UsageCheckModelConfig>,
+    #[serde(default)]
+    pub include_web_references: Option<bool>,
 }
 pub struct UsageCheckModelConfig {
     pub model_type: UsageCheckModelType,

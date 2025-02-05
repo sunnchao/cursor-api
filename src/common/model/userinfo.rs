@@ -1,5 +1,6 @@
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
+use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 
 #[derive(Serialize)]
 #[serde(untagged)]
@@ -8,14 +9,14 @@ pub enum GetUserInfo {
     Error { error: String },
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
 pub struct TokenProfile {
     pub usage: UsageProfile,
     pub user: UserProfile,
     pub stripe: StripeProfile,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
 pub enum MembershipType {
     #[serde(rename = "free")]
     Free,
@@ -27,7 +28,7 @@ pub enum MembershipType {
     Enterprise,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
 pub struct StripeProfile {
     #[serde(rename(deserialize = "membershipType"))]
     pub membership_type: MembershipType,
@@ -41,7 +42,7 @@ pub struct StripeProfile {
     pub days_remaining_on_trial: u32,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
 pub struct ModelUsage {
     #[serde(rename(deserialize = "numRequests", serialize = "requests"))]
     pub num_requests: u32,
@@ -65,7 +66,7 @@ pub struct ModelUsage {
     pub max_tokens: Option<u32>,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
 pub struct UsageProfile {
     #[serde(rename(deserialize = "gpt-4"))]
     pub premium: ModelUsage,
@@ -75,7 +76,7 @@ pub struct UsageProfile {
     pub unknown: ModelUsage,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
 pub struct UserProfile {
     pub email: String,
     // pub email_verified: bool,

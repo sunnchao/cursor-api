@@ -11,6 +11,7 @@ async function handleRequest(request) {
     const allowedHosts = ["api2.cursor.sh", "www.cursor.com"];
     const allowedPaths = [
       "/aiserver.v1.AiService/StreamChat",
+      "/aiserver.v1.AiService/StreamChatWeb",
       "/auth/full_stripe_profile",
       "/api/usage",
       "/api/auth/me"

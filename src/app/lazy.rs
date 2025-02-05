@@ -109,6 +109,12 @@ def_cursor_api_url!(
 );
 
 def_cursor_api_url!(
+    CURSOR_API2_CHAT_WEB_URL,
+    CURSOR_API2_HOST,
+    "/aiserver.v1.AiService/StreamChatWeb"
+);
+
+def_cursor_api_url!(
     CURSOR_API2_STRIPE_URL,
     CURSOR_API2_HOST,
     "/auth/full_stripe_profile"
@@ -117,6 +123,12 @@ def_cursor_api_url!(
 def_cursor_api_url!(CURSOR_USAGE_API_URL, CURSOR_HOST, "/api/usage");
 
 def_cursor_api_url!(CURSOR_USER_API_URL, CURSOR_HOST, "/api/auth/me");
+
+pub(super) static LOGS_FILE_PATH: LazyLock<String> =
+    LazyLock::new(|| parse_string_from_env("LOGS_FILE_PATH", "logs.bin"));
+
+pub(super) static PAGES_FILE_PATH: LazyLock<String> =
+    LazyLock::new(|| parse_string_from_env("PAGES_FILE_PATH", "pages.bin"));
 
 pub static DEBUG: LazyLock<bool> = LazyLock::new(|| parse_bool_from_env("DEBUG", false));
 

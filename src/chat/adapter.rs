@@ -15,8 +15,7 @@ use crate::{
 
 use super::{
     aiserver::v1::{
-        conversation_message, image_proto, AzureState, ConversationMessage, ExplicitContext,
-        GetChatRequest, ImageProto, ModelDetails,
+        conversation_message, image_proto, AzureState, ChatExternalLink, ConversationMessage, ExplicitContext, GetChatRequest, ImageProto, ModelDetails
     },
     constant::{ERR_UNSUPPORTED_GIF, ERR_UNSUPPORTED_IMAGE_FORMAT, LONG_CONTEXT_MODELS},
     model::{Message, MessageContent, Role},
@@ -25,7 +24,7 @@ use super::{
 async fn process_chat_inputs(
     inputs: Vec<Message>,
     disable_vision: bool,
-) -> (String, Vec<ConversationMessage>) {
+) -> (String, Vec<ConversationMessage>, Vec<String>) {
     // 收集 system 指令
     let instructions = inputs
         .iter()
@@ -98,8 +97,24 @@ async fn process_chat_inputs(
                 file_diff_trajectories: vec![],
                 conversation_summary: None,
             }],
+            vec![],
         );
     }
+
+    // 处理 WebReferences 开头的 assistant 消息
+    chat_inputs = chat_inputs
+        .into_iter()
+        .map(|mut input| {
+            if let (Role::Assistant, MessageContent::Text(text)) = (&input.role, &input.content) {
+                if text.starts_with("WebReferences:") {
+                    if let Some(pos) = text.find("\n\n") {
+                        input.content = MessageContent::Text(text[pos + 2..].to_owned());
+                    }
+                }
+            }
+            input
+        })
+        .collect();
 
     // 如果第一条是 assistant，插入空的 user 消息
     if chat_inputs
@@ -226,7 +241,32 @@ async fn process_chat_inputs(
         });
     }
 
-    (instructions, messages)
+    let mut urls = Vec::new();
+    if let Some(last_msg) = messages.last() {
+        if last_msg.r#type == conversation_message::MessageType::Human as i32 {
+            let text = &last_msg.text;
+            let mut chars = text.chars().peekable();
+            
+            while let Some(c) = chars.next() {
+                if c == '@' {
+                    let mut url = String::new();
+                    while let Some(&next_char) = chars.peek() {
+                        if next_char.is_whitespace() {
+                            break;
+                        }
+                        url.push(chars.next().unwrap());
+                    }
+                    if let Ok(parsed_url) = url::Url::parse(&url) {
+                        if parsed_url.scheme() == "http" || parsed_url.scheme() == "https" {
+                            urls.push(url);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    (instructions, messages, urls)
 }
 
 async fn fetch_image_data(
@@ -344,6 +384,7 @@ pub async fn encode_chat_message(
     model_name: &str,
     disable_vision: bool,
     enable_slow_pool: bool,
+    is_search: bool,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
     // 在进入异步操作前获取并释放锁
     let enable_slow_pool = {
@@ -354,7 +395,7 @@ pub async fn encode_chat_message(
         }
     };
 
-    let (instructions, messages) = process_chat_inputs(inputs, disable_vision).await;
+    let (instructions, messages, urls) = process_chat_inputs(inputs, disable_vision).await;
 
     let explicit_context = if !instructions.trim().is_empty() {
         Some(ExplicitContext {
@@ -364,6 +405,15 @@ pub async fn encode_chat_message(
     } else {
         None
     };
+
+    let base_uuid = rand::random::<u16>();
+    let external_links = urls.into_iter().enumerate().map(|(i, url)| {
+        let uuid = base_uuid.wrapping_add(i as u16);
+        ChatExternalLink {
+            url,
+            uuid: uuid.to_string(),
+        }
+    }).collect();
 
     let chat = GetChatRequest {
         current_file: None,
@@ -394,11 +444,15 @@ pub async fn encode_chat_message(
         is_bash: Some(false),
         conversation_id: Uuid::new_v4().to_string(),
         can_handle_filenames_after_language_ids: Some(true),
-        use_web: None,
+        use_web: if is_search {
+            Some("full_search".to_string())
+        } else {
+            None
+        },
         quotes: vec![],
         debug_info: None,
         workspace_id: None,
-        external_links: vec![],
+        external_links,
         commit_notes: vec![],
         long_context_mode: Some(LONG_CONTEXT_MODELS.contains(&model_name)),
         is_eval: Some(false),

@@ -1,49 +1,36 @@
-# AMD64 构建阶段
-FROM --platform=linux/amd64 rust:1.84.0-slim-bookworm as builder-amd64
+ARG TARGETARCH
+FROM --platform=linux/${TARGETARCH} rust:1.84.0-slim-bookworm as builder
+
+ARG TARGETARCH
+
 WORKDIR /app
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    build-essential protobuf-compiler pkg-config libssl-dev nodejs npm \
+    build-essential protobuf-compiler pkg-config libssl-dev nodejs npm openssl \
     && rm -rf /var/lib/apt/lists/*
+
 COPY . .
-ENV RUSTFLAGS="-C link-arg=-s"
-RUN cargo build --release && \
+RUN case "$TARGETARCH" in \
+      amd64) TARGET_CPU="x86-64-v3" ;; \
+      arm64) TARGET_CPU="neoverse-n1" ;; \
+      *) echo "Unsupported architecture: $TARGETARCH" && exit 1 ;; \
+    esac && \
+    RUSTFLAGS="-C link-arg=-s -C target-cpu=$TARGET_CPU" cargo build --release && \
     cp target/release/cursor-api /app/cursor-api
 
-# ARM64 构建阶段
-FROM --platform=linux/arm64 rust:1.84.0-slim-bookworm as builder-arm64
-WORKDIR /app
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    build-essential protobuf-compiler pkg-config libssl-dev nodejs npm \
-    && rm -rf /var/lib/apt/lists/*
-COPY . .
-ENV RUSTFLAGS="-C link-arg=-s"
-RUN cargo build --release && \
-    cp target/release/cursor-api /app/cursor-api
+# 运行阶段
+FROM --platform=linux/${TARGETARCH} debian:bookworm-slim
 
-# AMD64 运行阶段
-FROM --platform=linux/amd64 debian:bookworm-slim as run-amd64
 WORKDIR /app
 ENV TZ=Asia/Shanghai
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    ca-certificates tzdata \
+    ca-certificates tzdata openssl \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=builder-amd64 /app/cursor-api .
 
-# ARM64 运行阶段
-FROM --platform=linux/arm64 debian:bookworm-slim as run-arm64
-WORKDIR /app
-ENV TZ=Asia/Shanghai
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    ca-certificates tzdata \
-    && rm -rf /var/lib/apt/lists/*
-COPY --from=builder-arm64 /app/cursor-api .
+COPY --from=builder /app/cursor-api .
 
-# 通用配置
-FROM run-${TARGETARCH}
 ENV PORT=3000
 EXPOSE ${PORT}
 CMD ["./cursor-api"]

@@ -12,18 +12,22 @@ use crate::{
     },
 };
 use parking_lot::RwLock;
+use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 
 mod usage_check;
 pub use usage_check::UsageCheck;
+mod config;
 mod proxies;
 pub use proxies::Proxies;
 mod build_key;
 pub use build_key::*;
 
+use super::constant::{STATUS_FAILED, STATUS_PENDING, STATUS_SUCCESS};
+
 // 页面内容类型枚举
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Archive, RkyvDeserialize, RkyvSerialize)]
 #[serde(tag = "type", content = "content")]
 pub enum PageContent {
     #[serde(rename = "default")]
@@ -41,10 +45,8 @@ impl Default for PageContent {
 }
 
 // 静态配置
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct AppConfig {
-    stream_check: bool,
-    stop_stream: bool,
     vision_ability: VisionAbility,
     slow_pool: bool,
     allow_claude: bool,
@@ -54,9 +56,10 @@ pub struct AppConfig {
     share_token: String,
     is_share: bool,
     proxies: Proxies,
+    web_refs: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq)]
 pub enum VisionAbility {
     #[serde(rename = "none", alias = "disabled")]
     None,
@@ -87,7 +90,7 @@ impl Default for VisionAbility {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Archive, RkyvDeserialize, RkyvSerialize)]
 pub struct Pages {
     pub root_content: PageContent,
     pub logs_content: PageContent,
@@ -113,24 +116,6 @@ pub struct AppState {
 // 全局配置实例
 pub static APP_CONFIG: LazyLock<RwLock<AppConfig>> =
     LazyLock::new(|| RwLock::new(AppConfig::default()));
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            stream_check: true,
-            stop_stream: true,
-            vision_ability: VisionAbility::Base64,
-            slow_pool: false,
-            allow_claude: false,
-            pages: Pages::default(),
-            usage_check: UsageCheck::Default,
-            dynamic_key: false,
-            share_token: String::default(),
-            is_share: false,
-            proxies: Proxies::default(),
-        }
-    }
-}
 
 macro_rules! config_methods {
     ($($field:ident: $type:ty, $default:expr;)*) => {
@@ -207,8 +192,6 @@ macro_rules! config_methods_clone {
 impl AppConfig {
     pub fn init() {
         let mut config = APP_CONFIG.write();
-        config.stream_check = parse_bool_from_env("ENABLE_STREAM_CHECK", true);
-        config.stop_stream = parse_bool_from_env("INCLUDE_STOP_REASON_STREAM", true);
         config.vision_ability =
             VisionAbility::from_str(&parse_string_from_env("VISION_ABILITY", EMPTY_STRING));
         config.slow_pool = parse_bool_from_env("ENABLE_SLOW_POOL", false);
@@ -221,15 +204,15 @@ impl AppConfig {
         config.proxies = match std::env::var("PROXIES") {
             Ok(proxies) => Proxies::from_str(proxies.as_str()),
             Err(_) => Proxies::default(),
-        }
+        };
+        config.web_refs = parse_bool_from_env("INCLUDE_WEB_REFERENCES", false)
     }
 
     config_methods! {
-        stream_check: bool, true;
-        stop_stream: bool, true;
         slow_pool: bool, false;
         allow_claude: bool, false;
         dynamic_key: bool, false;
+        web_refs: bool, false;
     }
 
     config_methods_clone! {
@@ -341,11 +324,20 @@ impl AppConfig {
 
 impl AppState {
     pub fn new(token_infos: Vec<TokenInfo>) -> Self {
+        // 尝试加载保存的日志
+        let request_logs = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current()
+                .block_on(async { Self::load_saved_logs().await.unwrap_or_default() })
+        });
+
         Self {
-            total_requests: 0,
+            total_requests: request_logs.len() as u64,
             active_requests: 0,
-            error_requests: 0,
-            request_logs: Vec::new(),
+            error_requests: request_logs
+                .iter()
+                .filter(|log| matches!(log.status, LogStatus::Failed))
+                .count() as u64,
+            request_logs,
             token_infos,
         }
     }
@@ -357,8 +349,43 @@ impl AppState {
     }
 }
 
+#[derive(Clone, Archive, RkyvDeserialize, RkyvSerialize)]
+pub enum LogStatus {
+    Pending,
+    Success,
+    Failed,
+}
+
+impl Serialize for LogStatus {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.as_str_name())
+    }
+}
+
+impl LogStatus {
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Pending => STATUS_PENDING,
+            Self::Success => STATUS_SUCCESS,
+            Self::Failed => STATUS_FAILED,
+        }
+    }
+
+    pub fn from_str_name(s: &str) -> Option<Self> {
+        match s {
+            STATUS_PENDING => Some(Self::Pending),
+            STATUS_SUCCESS => Some(Self::Success),
+            STATUS_FAILED => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+
 // 请求日志
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
 pub struct RequestLog {
     pub id: u64,
     pub timestamp: chrono::DateTime<chrono::Local>,
@@ -368,12 +395,12 @@ pub struct RequestLog {
     pub prompt: Option<String>,
     pub timing: TimingInfo,
     pub stream: bool,
-    pub status: &'static str,
+    pub status: LogStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
 pub struct TimingInfo {
     pub total: f64, // 总用时(秒)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -390,7 +417,7 @@ pub struct ChatRequest {
 }
 
 // 用于存储 token 信息
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
 pub struct TokenInfo {
     pub token: String,
     pub checksum: String,

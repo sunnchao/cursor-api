@@ -1,6 +1,7 @@
 use reqwest::{Client, Proxy};
 use serde::{Serialize, Serializer};
 use serde::{Deserialize, Deserializer};
+// use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 
 use crate::app::constant::COMMA_STRING;
 
@@ -30,7 +31,7 @@ impl<'de> Deserialize<'de> for Proxies {
     where
         D: Deserializer<'de>,
     {
-        let s = String::deserialize(deserializer)?;
+        let s = <String as serde::Deserialize>::deserialize(deserializer)?;
         Ok(Proxies::from_str(&s))
     }
 }

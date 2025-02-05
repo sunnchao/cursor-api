@@ -5,8 +5,7 @@ use crate::{app::{
         HEADER_NAME_GHOST_MODE, TRUE,
     },
     lazy::{
-        CURSOR_API2_CHAT_URL, CURSOR_API2_STRIPE_URL, CURSOR_USAGE_API_URL, CURSOR_USER_API_URL,
-        REVERSE_PROXY_HOST, USE_REVERSE_PROXY,
+        CURSOR_API2_CHAT_URL, CURSOR_API2_CHAT_WEB_URL, CURSOR_API2_STRIPE_URL, CURSOR_USAGE_API_URL, CURSOR_USER_API_URL, REVERSE_PROXY_HOST, USE_REVERSE_PROXY
     },
 }, AppConfig};
 use reqwest::header::{
@@ -67,19 +66,24 @@ pub fn rebuild_http_client() {
 /// # 返回
 ///
 /// * `reqwest::RequestBuilder` - 配置好的请求构建器
-pub fn build_client(auth_token: &str, checksum: &str) -> RequestBuilder {
+pub fn build_client(auth_token: &str, checksum: &str, is_search: bool) -> RequestBuilder {
     let trace_id = Uuid::new_v4().to_string();
+    let url = if is_search {
+        &*CURSOR_API2_CHAT_WEB_URL
+    } else {
+        &*CURSOR_API2_CHAT_URL
+    };
 
     let client = if *USE_REVERSE_PROXY {
         HTTP_CLIENT
             .read()
-            .post(&*CURSOR_API2_CHAT_URL)
+            .post(url)
             .header(HOST, &*REVERSE_PROXY_HOST)
             .header(PROXY_HOST, CURSOR_API2_HOST)
     } else {
         HTTP_CLIENT
             .read()
-            .post(&*CURSOR_API2_CHAT_URL)
+            .post(url)
             .header(HOST, CURSOR_API2_HOST)
     };
 

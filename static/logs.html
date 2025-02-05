@@ -551,21 +551,6 @@
       return 'high';
     }
 
-    function formatMembershipType(type) {
-      if (!type) return '-';
-
-      switch (type) {
-        case 'free_trial': return 'Pro Trial';
-        case 'pro': return 'Pro';
-        case 'free': return 'Free';
-        case 'enterprise': return 'Business';
-        default: return type
-          .split('_')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
-      }
-    }
-
     function showTokenModal(tokenInfo) {
       const modal = document.getElementById('tokenModal');
       const deleteBtn = document.getElementById('deleteTokenBtn');

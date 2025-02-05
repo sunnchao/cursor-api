@@ -5,8 +5,6 @@ use crate::app::model::{PageContent, UsageCheck, VisionAbility, Proxies};
 #[derive(Serialize)]
 pub struct ConfigData {
     pub page_content: Option<PageContent>,
-    pub enable_stream_check: bool,
-    pub include_stop_stream: bool,
     pub vision_ability: VisionAbility,
     pub enable_slow_pool: bool,
     pub enable_all_claude: bool,
@@ -15,6 +13,7 @@ pub struct ConfigData {
     #[serde(skip_serializing_if = "String::is_empty")]
     pub share_token: String,
     pub proxies: Proxies,
+    pub include_web_references: bool,
 }
 
 #[derive(Deserialize, Default)]
@@ -23,8 +22,6 @@ pub struct ConfigUpdateRequest {
     pub action: String, // "get", "update", "reset"
     pub path: String,
     pub content: Option<PageContent>, // "default", "text", "html"
-    pub enable_stream_check: Option<bool>,
-    pub include_stop_stream: Option<bool>,
     pub vision_ability: Option<VisionAbility>,
     pub enable_slow_pool: Option<bool>,
     pub enable_all_claude: Option<bool>,
@@ -32,4 +29,5 @@ pub struct ConfigUpdateRequest {
     pub enable_dynamic_key: Option<bool>,
     pub share_token: Option<String>,
     pub proxies: Option<Proxies>,
+    pub include_web_references: Option<bool>,
 }

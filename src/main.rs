@@ -32,6 +32,7 @@ use chat::{
 };
 use common::utils::{load_tokens, parse_string_from_env, parse_usize_from_env};
 use std::sync::Arc;
+use tokio::signal;
 use tokio::sync::Mutex;
 use tower_http::{cors::CorsLayer, limit::RequestBodyLimitLayer};
 
@@ -63,6 +64,11 @@ async fn main() {
     // 初始化应用状态
     let state = Arc::new(Mutex::new(AppState::new(token_infos)));
 
+    // 尝试加载保存的配置
+    if let Err(e) = AppConfig::load_saved_config() {
+        eprintln!("加载保存的配置失败: {}", e);
+    }
+
     // 创建一个克隆用于后台任务
     let state_for_reload = state.clone();
 
@@ -84,9 +90,54 @@ async fn main() {
 
             let mut app_state = state_for_reload.lock().await;
             app_state.update_checksum();
-            debug_println!("checksum 自动刷新: {}", next_reload);
+            // debug_println!("checksum 自动刷新: {}", next_reload);
         }
     });
+
+    // 创建一个克隆用于信号处理
+    let state_for_shutdown = state.clone();
+
+    // 设置关闭信号处理
+    let shutdown_signal = async move {
+        let ctrl_c = async {
+            signal::ctrl_c()
+                .await
+                .expect("failed to install Ctrl+C handler");
+        };
+
+        #[cfg(unix)]
+        let terminate = async {
+            signal::unix::signal(signal::unix::SignalKind::terminate())
+                .expect("failed to install signal handler")
+                .recv()
+                .await;
+        };
+
+        #[cfg(not(unix))]
+        let terminate = std::future::pending::<()>();
+
+        tokio::select! {
+            _ = ctrl_c => {},
+            _ = terminate => {},
+        }
+
+        println!("正在关闭服务器...");
+
+        // 保存配置
+        if let Err(e) = AppConfig::save_config() {
+            eprintln!("保存配置失败: {}", e);
+        } else {
+            println!("配置已保存");
+        }
+
+        // 保存日志
+        let state = state_for_shutdown.lock().await;
+        if let Err(e) = state.save_logs().await {
+            eprintln!("保存日志失败: {}", e);
+        } else {
+            println!("日志已保存");
+        }
+    };
 
     // 设置路由
     let app = Router::new()
@@ -128,9 +179,19 @@ async fn main() {
     println!("服务器运行在端口 {}", port);
     println!("当前版本: v{}", PKG_VERSION);
     // if PKG_VERSION.contains("pre") {
-    println!("当前是测试版，有问题及时反馈哦~");
+    // println!("当前是测试版，有问题及时反馈哦~");
     // }
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let server = axum::serve(listener, app);
+    tokio::select! {
+        result = server => {
+            if let Err(e) = result {
+                eprintln!("服务器错误: {}", e);
+            }
+        }
+        _ = shutdown_signal => {
+            println!("服务器已关闭");
+        }
+    }
 }

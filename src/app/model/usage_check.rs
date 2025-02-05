@@ -3,6 +3,7 @@ use crate::{
     chat::{config::key_config, constant::AVAILABLE_MODELS},
 };
 use serde::{Deserialize, Serialize};
+// use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 
 #[derive(Clone, PartialEq)]
 pub enum UsageCheck {
@@ -108,7 +109,7 @@ impl<'de> Deserialize<'de> for UsageCheck {
             Custom(String),
         }
 
-        let helper = UsageCheckHelper::deserialize(deserializer)?;
+        let helper = <UsageCheckHelper as serde::Deserialize>::deserialize(deserializer)?;
         Ok(match helper {
             UsageCheckHelper::None => UsageCheck::None,
             UsageCheckHelper::Default => UsageCheck::Default,

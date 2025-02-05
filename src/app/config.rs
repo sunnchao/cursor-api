@@ -65,8 +65,6 @@ pub async fn handle_config_update(
             status: ApiStatus::Success,
             data: Some(ConfigData {
                 page_content: AppConfig::get_page_content(&request.path),
-                enable_stream_check: AppConfig::get_stream_check(),
-                include_stop_stream: AppConfig::get_stop_stream(),
                 vision_ability: AppConfig::get_vision_ability(),
                 enable_slow_pool: AppConfig::get_slow_pool(),
                 enable_all_claude: AppConfig::get_allow_claude(),
@@ -74,6 +72,7 @@ pub async fn handle_config_update(
                 enable_dynamic_key: AppConfig::get_dynamic_key(),
                 share_token: AppConfig::get_share_token(),
                 proxies: AppConfig::get_proxies(),
+                include_web_references: AppConfig::get_web_refs(),
             }),
             message: None,
         })),
@@ -96,8 +95,6 @@ pub async fn handle_config_update(
             }
 
             handle_updates!(request,
-                enable_stream_check => AppConfig::update_stream_check,
-                include_stop_stream => AppConfig::update_stop_stream,
                 vision_ability => AppConfig::update_vision_ability,
                 enable_slow_pool => AppConfig::update_slow_pool,
                 enable_all_claude => AppConfig::update_allow_claude,
@@ -105,6 +102,7 @@ pub async fn handle_config_update(
                 enable_dynamic_key => AppConfig::update_dynamic_key,
                 share_token => AppConfig::update_share_token,
                 proxies => AppConfig::update_proxies,
+                include_web_references => AppConfig::update_web_refs,
             );
 
             Ok(Json(NormalResponse {
@@ -131,8 +129,6 @@ pub async fn handle_config_update(
             }
 
             handle_resets!(request,
-                enable_stream_check => AppConfig::reset_stream_check,
-                include_stop_stream => AppConfig::reset_stop_stream,
                 vision_ability => AppConfig::reset_vision_ability,
                 enable_slow_pool => AppConfig::reset_slow_pool,
                 enable_all_claude => AppConfig::reset_allow_claude,
@@ -140,6 +136,7 @@ pub async fn handle_config_update(
                 enable_dynamic_key => AppConfig::reset_dynamic_key,
                 share_token => AppConfig::reset_share_token,
                 proxies => AppConfig::reset_proxies,
+                include_web_references => AppConfig::reset_web_refs,
             );
 
             Ok(Json(NormalResponse {

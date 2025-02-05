@@ -118,7 +118,7 @@
     <div class="button-group">
       <button onclick="calibrateToken()">校准 Token</button>
       <button onclick="getUserInfo()">获取用户信息</button>
-      <button onclick="getModels()">获取模型列表</button>
+      <button onclick="getModels(true)">获取模型列表</button>
     </div>
 
     <div class="form-group model-input-container">
@@ -130,7 +130,7 @@
     <div class="form-group custom-suffix">
       <input type="checkbox" id="customSuffix" onchange="toggleCustomSuffix()">
       <label for="customSuffix">添加自定义后缀</label>
-      <input type="text" id="suffixInput" placeholder="@OpenAI" style="display: none;">
+      <input type="text" id="suffixInput" placeholder="-online@OpenAI" style="display: none;">
     </div>
   </div>
 
@@ -197,14 +197,16 @@
     }
 
     // 获取模型列表
-    async function getModels() {
+    async function getModels(showMessage = false) {
       try {
         const modelList = document.getElementById('modelList');
         const suffix = document.getElementById('customSuffix').checked ?
           document.getElementById('suffixInput').value : '';
 
         modelList.value = globalModels.map(model => model + suffix).join(',');
-        showGlobalMessage('模型列表已更新');
+        if (showMessage) {
+          showGlobalMessage('模型列表已更新');
+        }
       } catch (error) {
         showGlobalMessage('获取模型列表失败', true);
       }
@@ -223,7 +225,7 @@
       const suffixInput = document.getElementById('suffixInput');
       suffixInput.style.display = document.getElementById('customSuffix').checked ? 'block' : 'none';
       if (document.getElementById('customSuffix').checked) {
-        getModels();
+        getModels(false);
       }
     }
 
@@ -363,8 +365,13 @@
         await startStatusCheck();
         showGlobalMessage('系统初始化完成');
 
-        // 监听后缀输入变化
-        document.getElementById('suffixInput').addEventListener('input', getModels);
+        // 使用防抖处理后缀输入事件
+        const suffixInput = document.getElementById('suffixInput');
+        let debounceTimer;
+        suffixInput.addEventListener('input', () => {
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => getModels(false), 300);
+        });
       } catch (error) {
         showGlobalMessage('系统初始化失败', true);
       }

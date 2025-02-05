@@ -164,11 +164,10 @@ pub async fn handle_build_key(
     // 构建 proto 消息
     let mut key_config = KeyConfig {
         auth_token: Some(token_info),
-        enable_stream_check: request.enable_stream_check,
-        include_stop_stream: request.include_stop_stream,
         disable_vision: request.disable_vision,
         enable_slow_pool: request.enable_slow_pool,
         usage_check_models: None,
+        include_web_references: request.include_web_references,
     };
 
     if let Some(usage_check_models) = request.usage_check_models {

@@ -17,12 +17,6 @@ message KeyConfig {
   // 认证令牌（必需）
   TokenInfo auth_token = 1;
 
-  // 是否启用流检查
-  optional bool enable_stream_check = 2;
-
-  // 是否包含停止流
-  optional bool include_stop_stream = 3;
-
   // 是否禁用图片处理能力
   optional bool disable_vision = 4;
 
@@ -43,6 +37,9 @@ message KeyConfig {
   }
   // 使用量检查模型规则
   optional UsageCheckModel usage_check_models = 6;
+
+  // 包含网络引用
+  optional bool include_web_references = 7;
 
   // 密码SHA256哈希值
   // bytes secret = 2;

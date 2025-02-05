@@ -125,7 +125,7 @@ impl ErrorResponse {
 pub enum StreamError {
     ChatError(ChatError),
     DataLengthLessThan5,
-    EmptyMessage,
+    EmptyStream,
 }
 
 impl std::fmt::Display for StreamError {
@@ -133,7 +133,7 @@ impl std::fmt::Display for StreamError {
         match self {
             StreamError::ChatError(error) => write!(f, "{}", error.error.code),
             StreamError::DataLengthLessThan5 => write!(f, "data length less than 5"),
-            StreamError::EmptyMessage => write!(f, "empty message"),
+            StreamError::EmptyStream => write!(f, "empty stream"),
         }
     }
 }

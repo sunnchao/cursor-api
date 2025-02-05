@@ -171,7 +171,43 @@ data: [DONE]
   "tokens": [
     {
       "token": "string",
-      "checksum": "string"
+      "checksum": "string",
+      "profile": { // 可能存在
+        "usage": {
+          "premium": {
+            "requests": number,
+            "requests_total": number,
+            "tokens": number,
+            "max_requests": number,
+            "max_tokens": number
+          },
+          "standard": {
+            "requests": number,
+            "requests_total": number,
+            "tokens": number,
+            "max_requests": number,
+            "max_tokens": number
+          },
+          "unknown": {
+            "requests": number,
+            "requests_total": number,
+            "tokens": number,
+            "max_requests": number,
+            "max_tokens": number
+          }
+        },
+        "user": {
+          "email": "string",
+          "name": "string",
+          "id": "string",
+          "updated_at": "string"
+        },
+        "stripe": {
+          "membership_type": "free" | "free_trial" | "pro" | "enterprise",
+          "payment_id": "string",
+          "days_remaining_on_trial": number
+        }
+      }
     }
   ],
   "tokens_count": number
@@ -282,14 +318,13 @@ data: [DONE]
 ```json
 {
   "auth_token": "string",  // 格式: {token},{checksum}
-  "enable_stream_check": boolean,  // 可选，启用流式响应首块检查
-  "include_stop_stream": boolean,  // 可选，包含停止流
   "disable_vision": boolean,       // 可选，禁用图片处理能力
   "enable_slow_pool": boolean,     // 可选，启用慢速池
   "usage_check_models": {          // 可选，使用量检查模型配置
     "type": "default" | "disabled" | "all" | "custom",
     "model_ids": "string"  // 当type为custom时生效，以逗号分隔的模型ID列表
-  }
+  },
+  "include_web_references": boolean
 }
 ```
 
@@ -357,8 +392,6 @@ data: [DONE]
     "type": "default" | "text" | "html",
     "content": "string"
   },
-  "enable_stream_check": boolean,
-  "include_stop_stream": boolean,
   "vision_ability": "none" | "base64" | "all", // "disabled" | "base64-only" | "base64-http"
   "enable_slow_pool": boolean,
   "enable_all_claude": boolean,
@@ -368,7 +401,8 @@ data: [DONE]
   },
   "enable_dynamic_key": boolean,
   "share_token": "string",
-  "proxies": "" | "system" | "proxy1,proxy2,..."
+  "proxies": "" | "system" | "proxy1,proxy2,...",
+  "include_web_references": boolean
 }
 ```
 
@@ -383,8 +417,6 @@ data: [DONE]
       "type": "default" | "text" | "html", // 对于js和css后两者是一样的
       "content": "string"
     },
-    "enable_stream_check": boolean,
-    "include_stop_stream": boolean,
     "vision_ability": "none" | "base64" | "all",
     "enable_slow_pool": boolean,
     "enable_all_claude": boolean,
@@ -394,7 +426,8 @@ data: [DONE]
     },
     "enable_dynamic_key": boolean,
     "share_token": "string",
-    "proxies": "" | "system" | "proxy1,proxy2,..."
+    "proxies": "" | "system" | "proxy1,proxy2,...",
+    "include_web_references": boolean
   }
 }
 ```
