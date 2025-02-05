@@ -15,7 +15,7 @@ use crate::{
         utils::{
             extract_time, extract_time_ks, extract_user_id, generate_checksum_with_default,
             generate_checksum_with_repair, generate_hash, generate_timestamp_header, load_tokens,
-            parse_token, validate_token, validate_token_and_checksum, write_tokens,
+            parse_token, validate_token, validate_token_and_checksum, write_tokens, get_token_profile,
         },
     },
 };
@@ -93,7 +93,26 @@ pub async fn handle_get_tokens(
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    let tokens = state.lock().await.token_infos.clone();
+    let mut tokens = state.lock().await.token_infos.clone();
+    
+    // 并行获取每个token的使用详情
+    let futures: Vec<_> = tokens
+        .iter_mut()
+        .map(|token_info| async {
+            println!("Fetching profile for token: {}", token_info.token);
+            let start = std::time::Instant::now();
+            
+            if let Some(profile) = get_token_profile(&token_info.token).await {
+                token_info.profile = Some(profile);
+                println!("Profile fetched for token: {} (took {:?})", token_info.token, start.elapsed());
+            } else {
+                println!("Failed to fetch profile for token: {}", token_info.token);
+            }
+        })
+        .collect();
+    
+    futures::future::join_all(futures).await;
+    
     let tokens_count = tokens.len();
 
     Ok(Json(TokenInfoResponse {
