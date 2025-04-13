@@ -18,7 +18,7 @@ on:
       - 'v*'
 
 env:
-  IMAGE_NAME: ${{ github.repository_owner }}/cursor-api
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/cursor-api
 
 jobs:
   build-and-push:
