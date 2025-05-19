@@ -135,7 +135,7 @@ impl From<super::Prompt> for PromptHelper {
 #[derive(rkyv::Archive, rkyv::Deserialize, rkyv::Serialize)]
 pub struct ChainHelper {
     pub prompt: PromptHelper,
-    pub delays: Vec<(String, f64)>,
+    pub delays: Option<(String, Vec<(u32, f32)>)>,
     pub usage: super::OptionUsage,
 }
 impl From<ChainHelper> for super::Chain {

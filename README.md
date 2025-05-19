@@ -80,6 +80,46 @@ deepseek-v3
 deepseek-r1
 o3-mini
 grok-2
+deepseek-v3.1
+grok-3-beta
+grok-3-mini-beta
+gpt-4.1
+```
+
+支持思考：
+```
+claude-3.7-sonnet-thinking
+claude-3.7-sonnet-thinking-max
+o1-mini
+o1-preview
+o1
+gemini-2.5-pro-exp-03-25
+gemini-2.5-pro-max
+gemini-2.0-flash-thinking-exp
+deepseek-r1
+o3-mini
+```
+
+支持图像：
+```
+claude-3.5-sonnet
+claude-3.7-sonnet
+claude-3.7-sonnet-thinking
+claude-3.7-sonnet-max
+claude-3.7-sonnet-thinking-max
+gpt-4
+gpt-4o
+gpt-4.5-preview
+claude-3-opus
+gpt-4-turbo-2024-04-09
+gpt-4o-128k
+claude-3-haiku-200k
+claude-3-5-sonnet-200k
+gpt-4o-mini
+claude-3.5-haiku
+gemini-2.5-pro-exp-03-25
+gemini-2.5-pro-max
+gpt-4.1
 ```
 
 ## 接口说明
@@ -961,9 +1001,12 @@ string
           }
         ],
         "delays": [
+          "string",
           [
-            "string",
-            number
+            [
+              number, // chars count
+              number // time
+            ]
           ]
         ],
         "usage": { // optional

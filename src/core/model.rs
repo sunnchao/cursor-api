@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use serde::{ser::SerializeStruct as _, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, ser::SerializeStruct as _};
 
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
@@ -12,7 +12,7 @@ pub enum MessageContent {
 #[derive(Serialize, Deserialize)]
 pub struct VisionMessageContent {
     #[serde(rename = "type")]
-    pub rtype: String,
+    pub r#type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -53,8 +53,8 @@ pub enum Role {
 }
 
 #[derive(Serialize)]
-pub struct ChatResponse {
-    pub id: String,
+pub struct ChatResponse<'a> {
+    pub id: &'a str,
     pub object: &'static str,
     pub created: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -116,13 +116,16 @@ pub struct StreamOptions {
     pub include_usage: bool,
 }
 
-// 模型定义
+/// 模型定义
+#[derive(Clone, Copy)]
 pub struct Model {
     pub id: &'static str,
     pub display_name: &'static str,
     pub created: &'static i64,
     pub object: &'static str,
     pub owned_by: &'static str,
+    pub is_thinking: bool,
+    pub is_image: bool,
 }
 
 impl Serialize for Model {
@@ -130,7 +133,7 @@ impl Serialize for Model {
     where
         S: serde::Serializer,
     {
-        let mut state = serializer.serialize_struct("Model", 7)?;
+        let mut state = serializer.serialize_struct("Model", 9)?;
 
         state.serialize_field("id", &self.id)?;
         state.serialize_field("display_name", &self.display_name)?;
@@ -139,6 +142,8 @@ impl Serialize for Model {
         state.serialize_field("object", &self.object)?;
         state.serialize_field("type", &self.object)?;
         state.serialize_field("owned_by", &self.owned_by)?;
+        state.serialize_field("supports_thinking", &self.is_thinking)?;
+        state.serialize_field("supports_images", &self.is_image)?;
 
         state.end()
     }
@@ -150,19 +155,19 @@ impl PartialEq for Model {
     }
 }
 
-use super::constant::{Models, USAGE_CHECK_MODELS};
+use super::constant::{FREE_MODELS, Models};
 use crate::{
     app::model::{AppConfig, UsageCheck},
     common::model::tri::TriState,
 };
 
 impl Model {
-    pub fn is_usage_check(model_id: &str, usage_check: Option<UsageCheck>) -> bool {
+    pub fn is_usage_check(&self, usage_check: Option<UsageCheck>) -> bool {
         match usage_check.unwrap_or(AppConfig::get_usage_check()) {
             UsageCheck::None => false,
-            UsageCheck::Default => USAGE_CHECK_MODELS.contains(&model_id),
+            UsageCheck::Default => !FREE_MODELS.contains(&self.id),
             UsageCheck::All => true,
-            UsageCheck::Custom(models) => models.contains(&model_id),
+            UsageCheck::Custom(models) => models.contains(&self.id),
         }
     }
 }

@@ -4,11 +4,11 @@ use sha2::{Digest, Sha256};
 #[inline]
 pub fn generate_hash() -> String {
     use rand::Rng as _;
-    hex::encode(
-        Sha256::new()
-            .chain_update(rand::rng().random::<[u8; 32]>())
-            .finalize(),
-    )
+    let mut v = rand::rng().random::<[u8; 32]>();
+    if *crate::app::lazy::SAFE_HASH {
+        v = Sha256::new().chain_update(v).finalize().into();
+    }
+    hex::encode(v)
 }
 
 #[inline]
@@ -31,10 +31,19 @@ fn deobfuscate_bytes(bytes: &mut [u8]) {
     }
 }
 
-pub fn generate_timestamp_header() -> String {
+pub fn generate_timestamp_header() -> [u8; 8] {
+    static CACHE: std::sync::LazyLock<parking_lot::Mutex<(u64, [u8; 8])>> =
+        std::sync::LazyLock::new(|| parking_lot::Mutex::new((0, [0u8; 8])));
     let timestamp = super::now_secs() / 1_000;
 
-    let mut timestamp_bytes = vec![
+    let mut guard = CACHE.lock();
+    if guard.0 == timestamp {
+        return guard.1;
+    } else {
+        guard.0 = timestamp;
+    }
+
+    let mut timestamp_bytes = [
         ((timestamp >> 8) & 0xFF) as u8,
         (0xFF & timestamp) as u8,
         ((timestamp >> 24) & 0xFF) as u8,
@@ -44,12 +53,16 @@ pub fn generate_timestamp_header() -> String {
     ];
 
     obfuscate_bytes(&mut timestamp_bytes);
-    BASE64.encode(&timestamp_bytes)
+    let mut result = [0u8; 8];
+    let _ = BASE64.encode_slice(&timestamp_bytes, &mut result);
+    guard.1 = result;
+    result
 }
 
 #[inline]
 pub fn generate_checksum(device_id: &str, mac_addr: Option<&str>) -> String {
-    let encoded = generate_timestamp_header();
+    let timestamp_header = generate_timestamp_header();
+    let encoded = unsafe { str::from_utf8_unchecked(&timestamp_header) };
     match mac_addr {
         Some(mac) => format!("{encoded}{device_id}/{mac}"),
         None => format!("{encoded}{device_id}"),
@@ -100,23 +113,23 @@ pub fn generate_checksum_with_repair(checksum: &str) -> String {
         }
     }
 
+    let timestamp_header = generate_timestamp_header();
+    let encoded = unsafe { str::from_utf8_unchecked(&timestamp_header) };
+
     // 校验通过后构造结果
     match len {
         72 => format!(
-            "{}{}/{}",
-            generate_timestamp_header(),
+            "{encoded}{}/{}",
             unsafe { std::str::from_utf8_unchecked(bytes.get_unchecked(8..)) },
             generate_hash()
         ),
         129 => format!(
-            "{}{}/{}",
-            generate_timestamp_header(),
+            "{encoded}{}/{}",
             unsafe { std::str::from_utf8_unchecked(bytes.get_unchecked(..64)) },
             unsafe { std::str::from_utf8_unchecked(bytes.get_unchecked(65..)) }
         ),
         137 => format!(
-            "{}{}/{}",
-            generate_timestamp_header(),
+            "{encoded}{}/{}",
             unsafe { std::str::from_utf8_unchecked(bytes.get_unchecked(8..72)) },
             unsafe { std::str::from_utf8_unchecked(bytes.get_unchecked(73..)) }
         ),

@@ -25,6 +25,7 @@ impl UsageCheck {
                         .model_ids
                         .iter()
                         .filter_map(|id| Models::find_id(id))
+                        .map(|m| m.id)
                         .collect();
                     if models.is_empty() {
                         Self::None
@@ -125,6 +126,7 @@ impl<'de> Deserialize<'de> for UsageCheck {
                         let model = model.trim();
                         Models::find_id(model)
                     })
+                    .map(|m| m.id)
                     .collect();
 
                 if models.is_empty() {
@@ -153,6 +155,7 @@ impl UsageCheck {
                         let model = model.trim();
                         Models::find_id(model)
                     })
+                    .map(|m| m.id)
                     .collect();
 
                 if models.is_empty() {

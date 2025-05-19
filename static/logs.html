@@ -649,6 +649,7 @@
             <th>Token信息</th>
             <th>对话</th>
             <th>用时</th>
+            <th>输入/输出</th>
             <th>流式响应</th>
             <th>状态</th>
             <th>错误信息</th>
@@ -1043,20 +1044,16 @@
       updatePaginationControls();
 
       tbody.innerHTML = data.logs.map(log => {
-        // 预处理延迟数据以避免HTML解析问题
-        let delaysData = '';
-        if (log.chain && log.chain.delays) {
-          // 为每个delay项创建安全的文本和数值对
-          const safeDelays = log.chain.delays.map(item => {
-            if (!Array.isArray(item) || item.length < 2) return ["", 0];
-
-            // 将延迟数据中的文本部分编码为Base64，避免HTML解析问题
-            const textPart = typeof item[0] === 'string' ? btoa(encodeURIComponent(item[0])) : "";
-            const delayPart = typeof item[1] === 'number' ? item[1] : 0;
-
-            return [textPart, delayPart];
-          });
-          delaysData = JSON.stringify(safeDelays);
+        let delaysDataAttribute = '';
+        if (log.chain && Array.isArray(log.chain.delays) && log.chain.delays.length === 2 && typeof log.chain.delays[0] === 'string' && Array.isArray(log.chain.delays[1])) {
+          try {
+            const originalDelaysJson = JSON.stringify(log.chain.delays);
+            const escapedJsonString = escapeHtml(originalDelaysJson);
+            delaysDataAttribute = `data-delays='${escapedJsonString}'`;
+          } catch (e) {
+            console.error('Failed to stringify delays data:', e, log.chain.delays);
+            delaysDataAttribute = '';
+          }
         }
 
         return `<tr>
@@ -1064,11 +1061,12 @@
           <td>${new Date(log.timestamp).toLocaleString()}</td>
           <td>${log.model}</td>
           <td><div class="token-info-tooltip"><button class="info-button" onclick='showTokenModal(${JSON.stringify(log.token_info)})'>查看详情<div class="tooltip-content">${formatSimpleTokenInfo(log.token_info)}</div></button></div></td>
-          <td>${log.chain ? `<div class="token-info-tooltip prompt-preview"><button class="info-button view-conversation" data-prompt="${encodeURIComponent(JSON.stringify(log.chain.prompt))}" data-delays='${delaysData}'>查看对话<div class="tooltip-content">${formatDialogPreview(JSON.stringify(log.chain.prompt))}</div></button></div>` : '-'}</td>
+          <td>${log.chain ? `<div class="token-info-tooltip prompt-preview"><button class="info-button view-conversation" data-prompt="${encodeURIComponent(JSON.stringify(log.chain.prompt))}" ${delaysDataAttribute}>查看对话<div class="tooltip-content">${formatDialogPreview(JSON.stringify(log.chain.prompt))}</div></button></div>` : '-'}</td>
           <td>${formatTiming(log.timing.total)}</td>
+          <td>${formatUsage(log.chain?.usage)}</td>
           <td>${log.stream ? '是' : '否'}</td>
           <td>${log.status}</td>
-          <td>${log.error.details || log.error || '-'}</td>
+          <td>${typeof log.error === 'string' ? log.error : log.error?.error ?? '-'}</td>
         </tr>`;
       }).join('');
 
@@ -1372,6 +1370,36 @@
       return messages;
     }
 
+    function escapeHtml(content) {
+      // 先转义HTML特殊字符
+      const escaped = content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+      return escaped;
+    }
+
+    function escapeHtmlAndControlChars(content) {
+      // 先转义HTML特殊字符
+      let escaped = content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+      // 然后转义控制字符
+      escaped = escaped
+        .replace(/\\/g, '\\\\')
+        .replace(/\n/g, '\\n')
+        .replace(/\t/g, '\\t')
+        .replace(/\r/g, '\\r');
+
+      return escaped;
+    }
+
     /**
      * 格式化对话内容为HTML表格
      * @param {Array<{role: string, content: string}>} messages - 对话消息数组
@@ -1388,17 +1416,6 @@
         'assistant': '助手'
       };
 
-      function escapeHtml(content) {
-        // 先转义HTML特殊字符
-        const escaped = content
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#039;');
-        return escaped;
-      }
-
       return `<table class="message-table"><thead><tr><th>角色</th><th>内容</th></tr></thead><tbody>${messages.map(msg =>
         `<tr><td>${roleLabels[msg.role] || msg.role}</td><td>${escapeHtml(msg.content).replace(/\n/g, '<br>')}</td></tr>`
       ).join('')}</tbody></table>`;
@@ -1407,72 +1424,102 @@
     /**
      * 显示对话详情弹窗
      * @param {string} promptStr - 对话提示字符串
-     * @param {Array} delays - 延迟数据数组
+     * @param {Array} delaysTuple - 延迟数据数组
      */
-    function showConversationModal(promptStr, delays) {
+    function showConversationModal(promptStr, delaysTuple) {
       try {
         const modal = document.getElementById('conversationModal');
         const dialogContent = document.getElementById('dialogContent');
         const delaysContent = document.getElementById('delaysContent');
         const tabPrompt = document.getElementById('tab-prompt');
         const tabDelays = document.getElementById('tab-delays');
+        const delaysTableBody = document.querySelector('#delaysTable tbody');
+        const delayChartContainer = document.querySelector('.delay-chart-container');
 
-        if (!modal || !dialogContent || !delaysContent || !tabPrompt || !tabDelays) {
+        if (!modal || !dialogContent || !delaysContent || !tabPrompt || !tabDelays || !delaysTableBody || !delayChartContainer) {
           console.error('Modal elements not found');
           return;
         }
 
-        // 显示对话内容
-        const messages = parsePrompt(promptStr);
-        dialogContent.innerHTML = formatPromptToTable(messages);
+        // 处理 Prompt
+        try {
+          const messages = parsePrompt(promptStr);
+          dialogContent.innerHTML = formatPromptToTable(messages);
+        } catch (e) {
+          console.error('解析 Prompt 数据失败:', e);
+          dialogContent.innerHTML = '<p>无法加载对话内容。</p>';
+        }
 
-        // 处理延迟数据
-        if (delays && delays.length > 0) {
-          const delaysTableBody = document.querySelector('#delaysTable tbody');
-          delaysTableBody.innerHTML = '';
+        // 处理 Delays
+        delaysTableBody.innerHTML = '';
+        delayChartContainer.innerHTML = '<canvas id="delayChart"></canvas>';
 
+        let fullText = '';
+        let delayPoints = [];
+        let chartDataPoints = [{ time: 0, chars: 0, text: '' }];
+
+        if (delaysTuple) {
+          if (Array.isArray(delaysTuple) && delaysTuple.length === 2 && typeof delaysTuple[0] === 'string' && Array.isArray(delaysTuple[1])) {
+            fullText = delaysTuple[0];
+            delayPoints = delaysTuple[1];
+          } else {
+            console.warn('Delays data format is incorrect:', delaysTuple);
+          }
+        }
+
+        if (delayPoints.length > 0) {
+          let currentIndex = 0;
           let totalChars = 0;
           let totalTime = 0;
 
-          // 解码并显示延迟数据
-          delays.forEach(([encodedText, delay], index) => {
-            try {
-              const text = encodedText ? decodeURIComponent(atob(encodedText)) : '';
-              totalChars += text.length;
-              totalTime += delay;
-              const rate = text.length / delay;
-              const avgRate = totalChars / totalTime;
-
-              const row = document.createElement('tr');
-              row.innerHTML = `
-                <td>${index + 1}</td>
-                <td>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;')}</td>
-                <td>${delay.toFixed(3)}</td>
-                <td>${rate.toFixed(1)} (平均: ${avgRate.toFixed(1)})</td>
-              `;
-              delaysTableBody.appendChild(row);
-            } catch (e) {
-              console.error('处理延迟数据项失败:', e);
+          delayPoints.forEach(([length, deltaTime], index) => {
+            if (typeof length !== 'number' || typeof deltaTime !== 'number' || length < 0 || deltaTime < 0) {
+              console.warn(`Skipping invalid delay point at index ${index}:`, [length, deltaTime]);
+              return;
             }
+
+            const chunkText = fullText.substring(currentIndex, currentIndex + length);
+            currentIndex += length;
+            totalChars += length;
+            totalTime += deltaTime;
+
+            const rate = deltaTime > 0 ? (length / deltaTime) : Infinity;
+            const avgRate = totalTime > 0 ? (totalChars / totalTime) : Infinity;
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td>${index + 1}</td>
+              <td>${escapeHtmlAndControlChars(chunkText)}</td>
+              <td>${deltaTime.toFixed(3)}</td>
+              <td>${isFinite(rate) ? rate.toFixed(1) : 'N/A'} (平均: ${isFinite(avgRate) ? avgRate.toFixed(1) : 'N/A'})</td>
+            `;
+            delaysTableBody.appendChild(row);
+
+            chartDataPoints.push({
+              time: totalTime,
+              chars: totalChars,
+              text: chunkText
+            });
           });
 
-          // 初始化延迟图表
-          initDelayChart(delays);
+          initDelayChart(chartDataPoints);
+          tabDelays.style.display = '';
+
         } else {
-          document.querySelector('#delaysTable tbody').innerHTML = '<tr><td colspan="2">无延迟数据</td></tr>';
-          document.querySelector('.delay-chart-container').innerHTML = '<div style="text-align: center; padding: 20px;">无延迟数据可供分析</div>';
+          delaysTableBody.innerHTML = '<tr><td colspan="4">无延迟数据</td></tr>';
+          delayChartContainer.innerHTML = '<div style="text-align: center; padding: 20px;">无延迟数据可供分析</div>';
+          tabDelays.style.display = 'none';
         }
 
-        // 设置标签切换事件
+        // 设置标签页
         tabPrompt.onclick = () => setActiveTab('prompt');
         tabDelays.onclick = () => setActiveTab('delays');
 
-        // 设置默认激活的标签页
         setActiveTab('prompt');
         modal.style.display = 'block';
+
       } catch (e) {
         console.error('显示对话详情失败:', e);
-        console.error('原始prompt:', promptStr);
       }
     }
 
@@ -1506,10 +1553,14 @@
 
     /**
      * 初始化延迟图表
-     * @param {Array} delays - 延迟数组
+     * @param {Array<{time: number, chars: number, text: string}>} chartDataPoints - 包含累计时间和字符数以及块文本的数据点数组
      */
-    function initDelayChart(delays) {
-      if (!delays || delays.length <= 1) {
+    function initDelayChart(chartDataPoints) {
+      if (!chartDataPoints || chartDataPoints.length <= 1) {
+        const container = document.querySelector('.delay-chart-container');
+        if (container) {
+          container.innerHTML = '<div style="text-align: center; padding: 20px;">延迟数据不足，无法绘制图表</div>';
+        }
         return;
       }
 
@@ -1519,71 +1570,35 @@
         return;
       }
 
-      // 销毁之前的图表（如果存在）
       const existingChart = Chart.getChart(ctx);
       if (existingChart) {
         existingChart.destroy();
       }
 
-      // 计算字符数和累计时间
-      const rawDataPoints = [];
-      let totalChars = 0;
-      let accumulatedTime = 0;
+      const maxPoints = 100;
+      let sampledPoints = chartDataPoints;
 
-      // 解密所有数据点并计算累计时间
-      for (let i = 0; i < delays.length; i++) {
-        const [encodedText, delay] = delays[i];
-        if (encodedText && typeof delay === 'number') {
-          try {
-            const text = decodeURIComponent(atob(encodedText));
-            totalChars += text.length;
-            accumulatedTime += delay;  // 累加延迟时间
-            rawDataPoints.push({
-              time: accumulatedTime,  // 使用累计时间
-              chars: totalChars,
-              text: text
-            });
-          } catch (e) {
-            console.error('解码延迟数据失败:', e);
-          }
+      if (chartDataPoints.length > maxPoints) {
+        sampledPoints = [];
+        const interval = (chartDataPoints.length - 2) / (maxPoints - 2);
+
+        sampledPoints.push(chartDataPoints[0]);
+
+        for (let i = 1; i < maxPoints - 1; i++) {
+          const rawIndex = Math.round(i * interval);
+          const actualIndex = Math.min(rawIndex + 1, chartDataPoints.length - 2);
+          sampledPoints.push(chartDataPoints[actualIndex]);
         }
+
+        sampledPoints.push(chartDataPoints[chartDataPoints.length - 1]);
       }
 
-      // 优化数据点密度
-      const maxPoints = 10;
-      let dataPoints = [];
-
-      if (rawDataPoints.length > maxPoints) {
-        // 计算采样间隔
-        const interval = Math.floor(rawDataPoints.length / maxPoints);
-
-        // 确保包含第一个点
-        dataPoints.push(rawDataPoints[0]);
-
-        // 采样中间点，使用更大的间隔
-        for (let i = interval; i < rawDataPoints.length - interval; i += interval) {
-          // 在每个采样点周围计算平均值，使曲线更平滑
-          const start = Math.max(0, i - Math.floor(interval / 2));
-          const end = Math.min(rawDataPoints.length, i + Math.floor(interval / 2));
-          const avgPoint = rawDataPoints[i];
-          dataPoints.push(avgPoint);
-        }
-
-        // 确保包含最后一个点
-        if (dataPoints[dataPoints.length - 1] !== rawDataPoints[rawDataPoints.length - 1]) {
-          dataPoints.push(rawDataPoints[rawDataPoints.length - 1]);
-        }
-      } else {
-        dataPoints = rawDataPoints;
-      }
-
-      // 创建新图表
       new Chart(ctx, {
         type: 'line',
         data: {
           datasets: [{
             label: '累计输出字符数',
-            data: dataPoints.map(point => ({
+            data: sampledPoints.map(point => ({
               x: point.time,
               y: point.chars
             })),
@@ -1606,16 +1621,33 @@
             tooltip: {
               callbacks: {
                 title: function (context) {
-                  return `用时: ${context[0].raw.x.toFixed(1)}秒`;
+                  const pointIndex = context[0].dataIndex;
+                  if (pointIndex < sampledPoints.length) {
+                    return `用时: ${sampledPoints[pointIndex].time.toFixed(1)}秒`;
+                  }
+                  return '';
                 },
                 label: function (context) {
-                  const point = context.raw;
-                  const rate = point.x > 0 ? (point.y / point.x).toFixed(1) : 0;
-                  return [
-                    `字符数: ${point.y}`,
-                    `平均速率: ${rate} 字符/秒`,
-                    `文本: ${dataPoints[context.dataIndex].text}`
-                  ];
+                  const pointIndex = context.dataIndex;
+                  if (pointIndex < sampledPoints.length) {
+                    const point = sampledPoints[pointIndex];
+                    const prevPoint = pointIndex > 0 ? sampledPoints[pointIndex - 1] : { time: 0, chars: 0, text: '' };
+
+                    const deltaTime = point.time - prevPoint.time;
+                    const deltaChars = point.chars - prevPoint.chars;
+                    const currentRate = deltaTime > 0 ? (deltaChars / deltaTime).toFixed(1) : 'N/A';
+                    const avgRate = point.time > 0 ? (point.chars / point.time).toFixed(1) : 'N/A';
+
+                    const chunkText = point.text || '';
+
+                    return [
+                      `累计字符: ${point.chars}`,
+                      `平均速率: ${avgRate} 字符/秒`,
+                      `当前块速率: ${currentRate} 字符/秒`,
+                      `当前块文本: ${escapeHtmlAndControlChars(chunkText.length > 50 ? chunkText.substring(0, 50) + '...' : chunkText)}`
+                    ];
+                  }
+                  return '';
                 }
               }
             }
@@ -1625,14 +1657,15 @@
               beginAtZero: true,
               title: {
                 display: true,
-                text: '字符数'
+                text: '累计字符数'
               }
             },
             x: {
               type: 'linear',
+              beginAtZero: true,
               title: {
                 display: true,
-                text: '用时（秒）'
+                text: '累计用时（秒）'
               },
               ticks: {
                 callback: function (value) {
@@ -1643,6 +1676,16 @@
           }
         }
       });
+    }
+
+    /**
+     * 格式化使用量信息
+     * @param {Object} usage - 使用量对象 { input: number, output: number }
+     * @returns {string} 格式化后的字符串
+     */
+    function formatUsage(usage) {
+      if (!usage) return '-';
+      return `${usage.input} / ${usage.output}`;
     }
   </script>
 </body>

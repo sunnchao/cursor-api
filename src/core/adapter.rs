@@ -18,11 +18,8 @@ use super::{
         AzureState, ChatExternalLink, ConversationMessage, ExplicitContext, GetChatRequest,
         ImageProto, ModelDetails, WebReference, conversation_message, image_proto,
     },
-    constant::{
-        ERR_UNSUPPORTED_GIF, ERR_UNSUPPORTED_IMAGE_FORMAT, LONG_CONTEXT_MODELS,
-        SUPPORTED_IMAGE_MODELS,
-    },
-    model::{Message, MessageContent, Role},
+    constant::{ERR_UNSUPPORTED_GIF, ERR_UNSUPPORTED_IMAGE_FORMAT, LONG_CONTEXT_MODELS},
+    model::{Message, MessageContent, Model, Role},
 };
 
 fn parse_web_references(text: &str) -> Vec<WebReference> {
@@ -90,7 +87,7 @@ async fn process_chat_inputs(
     inputs: Vec<Message>,
     now_with_tz: Option<chrono::DateTime<chrono_tz::Tz>>,
     disable_vision: bool,
-    model: &str,
+    model: Model,
 ) -> (String, Vec<ConversationMessage>, Vec<String>) {
     // 收集 system 指令
     let instructions = inputs
@@ -101,7 +98,7 @@ async fn process_chat_inputs(
             MessageContent::Vision(contents) => contents
                 .iter()
                 .filter_map(|content| {
-                    if content.rtype == "text" {
+                    if content.r#type == "text" {
                         content.text.clone()
                     } else {
                         None
@@ -114,9 +111,9 @@ async fn process_chat_inputs(
         .join("\n\n");
 
     // 使用默认指令或收集到的指令
-    let image_support = !disable_vision && SUPPORTED_IMAGE_MODELS.contains(&model);
+    let image_support = !disable_vision && model.is_image;
     let instructions = if instructions.is_empty() {
-        get_default_instructions(now_with_tz, model, image_support)
+        get_default_instructions(now_with_tz, model.id, image_support)
     } else {
         instructions
     };
@@ -239,7 +236,7 @@ async fn process_chat_inputs(
                 let mut images = Vec::new();
 
                 for content in contents {
-                    match content.rtype.as_str() {
+                    match content.r#type.as_str() {
                         "text" => {
                             if let Some(text) = content.text {
                                 text_parts.push(text);
@@ -493,7 +490,7 @@ async fn process_http_image(
 pub async fn encode_chat_message(
     inputs: Vec<Message>,
     now_with_tz: Option<chrono::DateTime<chrono_tz::Tz>>,
-    model: &str,
+    model: Model,
     disable_vision: bool,
     enable_slow_pool: bool,
     is_search: bool,
@@ -525,7 +522,7 @@ pub async fn encode_chat_message(
         })
         .collect();
 
-    let long_context = AppConfig::get_long_context() || LONG_CONTEXT_MODELS.contains(&model);
+    let long_context = AppConfig::get_long_context() || LONG_CONTEXT_MODELS.contains(&model.id);
 
     let chat = GetChatRequest {
         current_file: None,
@@ -535,7 +532,7 @@ pub async fn encode_chat_message(
         workspace_root_path: None,
         code_blocks: vec![],
         model_details: Some(ModelDetails {
-            model_name: Some(model.to_string()),
+            model_name: Some(model.id.to_string()),
             api_key: None,
             enable_ghost_mode: Some(true),
             azure_state: Some(AzureState {

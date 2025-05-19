@@ -1,8 +1,8 @@
 use crate::{
     app::{
         constant::{
-            AUTHORIZATION_BEARER_PREFIX, CONTENT_TYPE_TEXT_HTML_WITH_UTF8,
-            CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8, ROUTE_LOGS_PATH,
+            AUTHORIZATION_BEARER_PREFIX, ROUTE_LOGS_PATH, header_value_text_html_utf8,
+            header_value_text_plain_utf8,
         },
         lazy::AUTH_TOKEN,
         model::{AppConfig, AppState, LogStatus, PageContent, RequestLog},
@@ -30,15 +30,15 @@ use tokio::sync::Mutex;
 pub async fn handle_logs() -> impl IntoResponse {
     match AppConfig::get_page_content(ROUTE_LOGS_PATH).unwrap_or_default() {
         PageContent::Default => Response::builder()
-            .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_HTML_WITH_UTF8)
+            .header(CONTENT_TYPE, header_value_text_html_utf8())
             .body(Body::from(include_str!("../../../static/logs.min.html")))
             .unwrap(),
         PageContent::Text(content) => Response::builder()
-            .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8)
+            .header(CONTENT_TYPE, header_value_text_plain_utf8())
             .body(Body::from(content))
             .unwrap(),
         PageContent::Html(content) => Response::builder()
-            .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_HTML_WITH_UTF8)
+            .header(CONTENT_TYPE, header_value_text_html_utf8())
             .body(Body::from(content))
             .unwrap(),
     }
@@ -92,7 +92,7 @@ pub async fn handle_logs_post(
                 active: None,
                 error: None,
                 logs: Vec::new(),
-                timestamp: Local::now().to_string(),
+                timestamp: Local::now(),
             }));
         }
     }
@@ -108,7 +108,7 @@ pub async fn handle_logs_post(
                     active: None,
                     error: None,
                     logs: Vec::new(),
-                    timestamp: Local::now().to_string(),
+                    timestamp: Local::now(),
                 }));
             }
         }
@@ -117,123 +117,112 @@ pub async fn handle_logs_post(
     };
 
     // 准备日志数据（管理员或特定用户的）
-    let logs = if auth_header == auth_token {
-        state.request_manager.request_logs.clone()
-    } else {
+    let mut iterator = Box::new(state.request_manager.request_logs.iter())
+        as Box<dyn Iterator<Item = &RequestLog>>;
+    if auth_header != auth_token {
         // 解析 token
         let token_part = extract_token(auth_header).ok_or(StatusCode::UNAUTHORIZED)?;
 
         // 筛选符合条件的日志
-        let filtered_logs: Vec<RequestLog> = state
-            .request_manager
-            .request_logs
-            .iter()
-            .filter(|log| log.token_info.token == token_part)
-            .cloned()
-            .collect();
-
-        if filtered_logs.is_empty() {
-            return Err(StatusCode::UNAUTHORIZED);
-        }
-
-        filtered_logs
+        iterator = Box::new(iterator.filter(move |log| log.token_info.token == token_part));
     };
-
-    // 应用查询参数过滤
-    let mut result_logs = logs;
 
     // 按状态过滤
     if let Some(status) = &request.query.status {
-        result_logs.retain(|log| log.status.as_str_name() == *status);
+        iterator = Box::new(iterator.filter(move |log| log.status.as_str_name() == status));
     }
 
     // 按模型过滤
     if let Some(model) = &request.query.model {
-        result_logs.retain(|log| log.model.contains(model));
+        iterator = Box::new(iterator.filter(move |log| log.model.contains(model)));
     }
 
     // 按用户邮箱过滤
     if let Some(email) = &request.query.email {
-        result_logs.retain(|log| {
+        iterator = Box::new(iterator.filter(move |log| {
             log.token_info
                 .profile
                 .as_ref()
                 .map(|p| p.user.email.contains(email))
                 .unwrap_or(false)
-        });
+        }));
     }
 
     // 按会员类型过滤
     if let Some(membership_type) = membership_enum {
-        result_logs.retain(|log| {
+        iterator = Box::new(iterator.filter(move |log| {
             log.token_info
                 .profile
                 .as_ref()
                 .map(|p| p.stripe.membership_type == membership_type)
                 .unwrap_or(false)
-        });
+        }));
     }
 
     // 按总耗时范围过滤
     if let Some(min_time) = request.query.min_total_time {
-        result_logs.retain(|log| log.timing.total >= min_time);
+        iterator = Box::new(iterator.filter(move |log| log.timing.total >= min_time));
     }
 
     if let Some(max_time) = request.query.max_total_time {
-        result_logs.retain(|log| log.timing.total <= max_time);
+        iterator = Box::new(iterator.filter(move |log| log.timing.total <= max_time));
     }
 
     // 按是否为流式请求过滤
     if let Some(stream) = request.query.stream {
-        result_logs.retain(|log| log.stream == stream);
+        iterator = Box::new(iterator.filter(move |log| log.stream == stream));
     }
 
     // 按是否有错误过滤
     if let Some(has_error) = request.query.has_error {
-        result_logs.retain(|log| log.error.is_some() == has_error);
+        iterator = Box::new(iterator.filter(move |log| log.error.is_some() == has_error));
     }
 
     // 按是否有chain过滤
     if let Some(has_chain) = request.query.has_chain {
-        result_logs.retain(|log| log.chain.is_some() == has_chain);
+        iterator = Box::new(iterator.filter(move |log| log.chain.is_some() == has_chain));
     }
 
     // 按日期范围过滤
     if let Some(from_date) = request.query.from_date {
-        result_logs.retain(|log| log.timestamp >= from_date);
+        iterator = Box::new(iterator.filter(move |log| log.timestamp >= from_date));
     }
 
     if let Some(to_date) = request.query.to_date {
-        result_logs.retain(|log| log.timestamp <= to_date);
+        iterator = Box::new(iterator.filter(move |log| log.timestamp <= to_date));
     }
 
     // 获取总数
-    let total = result_logs.len() as u64;
+    let filtered_log_refs: Vec<_> = iterator.collect();
+    let total = filtered_log_refs.len() as u64;
 
     // 应用分页
-    if let Some(offset) = request.query.offset {
-        result_logs = result_logs.into_iter().skip(offset).collect();
-    }
+    let paginated_log_refs = filtered_log_refs
+        .into_iter()
+        .skip(request.query.offset.unwrap_or(0))
+        .take(request.query.limit.unwrap_or(usize::MAX));
 
-    if let Some(limit) = request.query.limit {
-        result_logs = result_logs.into_iter().take(limit).collect();
-    }
+    let result_logs: Vec<RequestLog> = paginated_log_refs.cloned().collect();
+    let active = if auth_header == auth_token {
+        Some(state.request_manager.active_requests)
+    } else {
+        None
+    };
+    let error = if auth_header == auth_token {
+        Some(state.request_manager.error_requests)
+    } else {
+        None
+    };
+
+    drop(state);
 
     Ok(Json(LogsResponse {
         status: ApiStatus::Success,
         total,
-        active: if auth_header == auth_token {
-            Some(state.request_manager.active_requests)
-        } else {
-            None
-        },
-        error: if auth_header == auth_token {
-            Some(state.request_manager.error_requests)
-        } else {
-            None
-        },
+        active,
+        error,
         logs: result_logs,
-        timestamp: Local::now().to_string(),
+        timestamp: Local::now(),
     }))
 }
 
@@ -246,5 +235,5 @@ pub struct LogsResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<u64>,
     pub logs: Vec<RequestLog>,
-    pub timestamp: String,
+    pub timestamp: DateTime<Local>,
 }

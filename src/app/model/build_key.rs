@@ -45,7 +45,7 @@ impl<'de> Deserialize<'de> for UsageCheckModelConfig {
                 .split(COMMA)
                 .filter_map(|model| {
                     let model = model.trim();
-                    Models::find_id(model)
+                    Models::find_id(model).map(|m| m.id)
                 })
                 .collect()
         };

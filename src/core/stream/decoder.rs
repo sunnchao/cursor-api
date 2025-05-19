@@ -1,14 +1,28 @@
-use crate::common::utils::InstantExt as _;
 use crate::core::{
     aiserver::v1::{StreamChatResponse, WebReference},
     error::{ChatError, StreamError},
 };
+use bytes::{Buf, BytesMut};
 use flate2::read::GzDecoder;
 use prost::Message;
 use std::io::Read;
 use std::time::Instant;
 
-// 解压gzip数据
+pub trait InstantExt {
+    fn duration_as_secs_f32(&mut self) -> f32;
+}
+
+impl InstantExt for Instant {
+    #[inline]
+    fn duration_as_secs_f32(&mut self) -> f32 {
+        let now = Instant::now();
+        let duration = now.duration_since(*self);
+        *self = now;
+        duration.as_secs_f32()
+    }
+}
+
+/// 解压gzip数据
 #[inline]
 fn decompress_gzip(data: &[u8]) -> Option<Vec<u8>> {
     if data.len() < 3
@@ -31,32 +45,6 @@ fn decompress_gzip(data: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
-pub trait ToMarkdown {
-    fn to_markdown(&self) -> String;
-}
-
-impl ToMarkdown for Vec<WebReference> {
-    #[inline]
-    fn to_markdown(&self) -> String {
-        if self.is_empty() {
-            return String::new();
-        }
-
-        let mut result = String::from("WebReferences:\n");
-        for (i, web_ref) in self.iter().enumerate() {
-            result.push_str(&format!(
-                "{}. [{}]({})<{}>\n",
-                i + 1,
-                web_ref.title,
-                web_ref.url,
-                web_ref.chunk
-            ));
-        }
-        result.push('\n');
-        result
-    }
-}
-
 #[derive(PartialEq, Clone)]
 pub enum StreamMessage {
     // 调试
@@ -64,6 +52,7 @@ pub enum StreamMessage {
     // 网络引用
     WebReference(Vec<WebReference>),
     // 内容开始标志
+    #[cfg(test)]
     ContentStart,
     // 消息内容
     Content(String),
@@ -77,18 +66,35 @@ impl StreamMessage {
     #[inline]
     fn convert_web_ref_to_content(self) -> Self {
         match self {
-            StreamMessage::WebReference(refs) => StreamMessage::Content(refs.to_markdown()),
+            StreamMessage::WebReference(refs) => {
+                if refs.is_empty() {
+                    return StreamMessage::Content(String::new());
+                }
+
+                let mut result = String::from("WebReferences:\n");
+                for (i, web_ref) in refs.iter().enumerate() {
+                    result.push_str(&format!(
+                        "{}. [{}]({})<{}>\n",
+                        i + 1,
+                        web_ref.title,
+                        web_ref.url,
+                        web_ref.chunk
+                    ));
+                }
+                result.push('\n');
+                StreamMessage::Content(result)
+            }
             other => other,
         }
     }
 }
 
 pub struct StreamDecoder {
-    // 主要数据缓冲区 (24字节)
-    buffer: Vec<u8>,
-    // 结果相关 (24字节 + 24字节)
+    // 主要数据缓冲区
+    buffer: BytesMut,
+    // 结果相关 (24字节 + 48字节)
     first_result: Option<Vec<StreamMessage>>,
-    content_delays: Vec<(String, f64)>,
+    content_delays: Option<(String, Vec<(u32, f32)>)>,
     // 计数器和时间 (8字节 + 8字节)
     empty_stream_count: usize,
     last_content_time: Instant,
@@ -101,9 +107,9 @@ pub struct StreamDecoder {
 impl StreamDecoder {
     pub fn new() -> Self {
         Self {
-            buffer: Vec::new(),
+            buffer: BytesMut::new(),
             first_result: None,
-            content_delays: Vec::new(),
+            content_delays: None,
             empty_stream_count: 0,
             last_content_time: Instant::now(),
             first_result_ready: false,
@@ -112,10 +118,12 @@ impl StreamDecoder {
         }
     }
 
+    #[inline]
     pub fn get_empty_stream_count(&self) -> usize {
         self.empty_stream_count
     }
 
+    #[inline]
     pub fn reset_empty_stream_count(&mut self) {
         if self.empty_stream_count > 0 {
             crate::debug_println!(
@@ -126,10 +134,7 @@ impl StreamDecoder {
         }
     }
 
-    pub fn increment_empty_stream_count(&mut self) {
-        self.empty_stream_count += 1;
-    }
-
+    #[inline]
     pub fn take_first_result(&mut self) -> Option<Vec<StreamMessage>> {
         if !self.buffer.is_empty() {
             return None;
@@ -145,14 +150,17 @@ impl StreamDecoder {
         !self.buffer.is_empty()
     }
 
+    #[inline]
     pub fn is_first_result_ready(&self) -> bool {
         self.first_result_ready
     }
 
-    pub fn take_content_delays(&mut self) -> Vec<(String, f64)> {
+    #[inline]
+    pub fn take_content_delays(&mut self) -> Option<(String, Vec<(u32, f32)>)> {
         std::mem::take(&mut self.content_delays)
     }
 
+    #[inline]
     pub fn no_first_cache(mut self) -> Self {
         self.first_result_ready = true;
         self.first_result_taken = true;
@@ -172,7 +180,7 @@ impl StreamDecoder {
 
         if self.buffer.len() < 5 {
             if self.buffer.is_empty() {
-                self.increment_empty_stream_count();
+                self.empty_stream_count += 1;
 
                 return Err(StreamError::EmptyStream);
             }
@@ -182,20 +190,68 @@ impl StreamDecoder {
 
         self.reset_empty_stream_count();
 
-        let mut messages = Vec::new();
+        let reserve = {
+            let mut offset = 0;
+            let mut count = 0;
+            while offset + 5 <= self.buffer.len() {
+                let msg_len: usize;
+
+                // SAFETY: The loop condition `offset + 5 <= self.buffer.len()` guarantees
+                // that indices `offset` through `offset + 4` are within bounds.
+                unsafe {
+                    msg_len = u32::from_be_bytes([
+                        *self.buffer.get_unchecked(offset + 1),
+                        *self.buffer.get_unchecked(offset + 2),
+                        *self.buffer.get_unchecked(offset + 3),
+                        *self.buffer.get_unchecked(offset + 4),
+                    ]) as usize;
+                }
+
+                if msg_len == 0 {
+                    offset += 5;
+                    continue;
+                }
+
+                if offset + 5 + msg_len > self.buffer.len() {
+                    break;
+                }
+
+                offset += 5 + msg_len;
+                count += 1;
+            }
+            count
+        };
+
+        if let Some(content_delays) = self.content_delays.as_mut() {
+            content_delays.0.reserve(reserve);
+            content_delays.1.reserve(reserve);
+        } else {
+            self.content_delays =
+                Some((String::with_capacity(reserve), Vec::with_capacity(reserve)));
+        }
+
+        let mut messages = Vec::with_capacity(reserve);
         let mut offset = 0;
 
         while offset + 5 <= self.buffer.len() {
-            let msg_type = self.buffer[offset];
-            let msg_len = u32::from_be_bytes([
-                self.buffer[offset + 1],
-                self.buffer[offset + 2],
-                self.buffer[offset + 3],
-                self.buffer[offset + 4],
-            ]) as usize;
+            let msg_type: u8;
+            let msg_len: usize;
+
+            // SAFETY: The loop condition `offset + 5 <= self.buffer.len()` guarantees
+            // that indices `offset` through `offset + 4` are within bounds.
+            unsafe {
+                msg_type = *self.buffer.get_unchecked(offset);
+                msg_len = u32::from_be_bytes([
+                    *self.buffer.get_unchecked(offset + 1),
+                    *self.buffer.get_unchecked(offset + 2),
+                    *self.buffer.get_unchecked(offset + 3),
+                    *self.buffer.get_unchecked(offset + 4),
+                ]) as usize;
+            }
 
             if msg_len == 0 {
                 offset += 5;
+                #[cfg(test)]
                 messages.push(StreamMessage::ContentStart);
                 continue;
             }
@@ -209,8 +265,13 @@ impl StreamDecoder {
             if let Some(msg) = self.process_message(msg_type, msg_data)? {
                 if let StreamMessage::Content(content) = &msg {
                     self.has_seen_content = true;
-                    let delay = self.last_content_time.duration_as_secs_f64();
-                    self.content_delays.push((content.clone(), delay));
+                    let delay = self.last_content_time.duration_as_secs_f32();
+                    if let Some(content_delays) = self.content_delays.as_mut() {
+                        content_delays.0.push_str(content);
+                        content_delays
+                            .1
+                            .push((content.chars().count() as u32, delay));
+                    }
                 }
                 if convert_web_ref {
                     messages.push(msg.convert_web_ref_to_content());
@@ -222,7 +283,7 @@ impl StreamDecoder {
             offset += 5 + msg_len;
         }
 
-        self.buffer.drain(..offset);
+        self.buffer.advance(offset);
 
         if !self.first_result_taken && !messages.is_empty() {
             if self.first_result.is_none() {

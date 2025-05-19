@@ -3,7 +3,7 @@ use memmap2::{MmapMut, MmapOptions};
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     fs::OpenOptions,
 };
 
@@ -59,7 +59,7 @@ pub struct RequestStatsManager {
     pub total_requests: u64,
     pub active_requests: u64,
     pub error_requests: u64,
-    pub request_logs: Vec<RequestLog>,
+    pub request_logs: VecDeque<RequestLog>,
 }
 
 pub struct AppState {
@@ -180,7 +180,7 @@ impl TokenManager {
 }
 
 impl RequestStatsManager {
-    pub fn new(request_logs: Vec<RequestLog>) -> Self {
+    pub fn new(request_logs: VecDeque<RequestLog>) -> Self {
         Self {
             total_requests: request_logs.len() as u64,
             active_requests: 0,
@@ -220,11 +220,11 @@ impl RequestStatsManager {
         Ok(())
     }
 
-    pub async fn load_logs() -> Result<Vec<RequestLog>, Box<dyn std::error::Error>> {
+    pub async fn load_logs() -> Result<VecDeque<RequestLog>, Box<dyn std::error::Error>> {
         let file = match OpenOptions::new().read(true).open(&*LOGS_FILE_PATH) {
             Ok(file) => file,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(Vec::new());
+                return Ok(VecDeque::new());
             }
             Err(e) => return Err(Box::new(e)),
         };

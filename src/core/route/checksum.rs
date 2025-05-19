@@ -6,7 +6,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::{
-    app::constant::CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8,
+    app::constant::header_value_text_plain_utf8,
     common::utils::{
         generate_checksum_with_default, generate_checksum_with_repair, generate_hash,
         generate_timestamp_header,
@@ -16,11 +16,7 @@ use crate::{
 pub async fn handle_get_hash() -> Response {
     let hash = generate_hash();
 
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        CONTENT_TYPE,
-        CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8.parse().unwrap(),
-    );
+    let headers = HeaderMap::from_iter([(CONTENT_TYPE, header_value_text_plain_utf8().clone())]);
 
     (headers, hash).into_response()
 }
@@ -37,11 +33,7 @@ pub async fn handle_get_checksum(Query(query): Query<ChecksumQuery>) -> Response
         Some(checksum) => generate_checksum_with_repair(&checksum),
     };
 
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        CONTENT_TYPE,
-        CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8.parse().unwrap(),
-    );
+    let headers = HeaderMap::from_iter([(CONTENT_TYPE, header_value_text_plain_utf8().clone())]);
 
     (headers, checksum).into_response()
 }
@@ -49,11 +41,7 @@ pub async fn handle_get_checksum(Query(query): Query<ChecksumQuery>) -> Response
 pub async fn handle_get_timestamp_header() -> Response {
     let timestamp_header = generate_timestamp_header();
 
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        CONTENT_TYPE,
-        CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8.parse().unwrap(),
-    );
+    let headers = HeaderMap::from_iter([(CONTENT_TYPE, header_value_text_plain_utf8().clone())]);
 
     (headers, timestamp_header).into_response()
 }

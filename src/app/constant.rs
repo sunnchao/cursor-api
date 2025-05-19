@@ -1,3 +1,6 @@
+mod header;
+pub use header::*;
+
 #[macro_export]
 macro_rules! def_pub_const {
     // 单个常量定义
@@ -78,25 +81,10 @@ def_pub_const!(
     STATUS_FAILURE => "failure"
 );
 
-// Header constants
-def_pub_const!(
-    HEADER_NAME_GHOST_MODE => "x-ghost-mode"
-);
-
 // Boolean constants
 def_pub_const!(
     TRUE => "true",
     FALSE => "false"
-);
-
-// Content type constants
-def_pub_const!(
-    CONTENT_TYPE_PROTO => "application/proto",
-    CONTENT_TYPE_CONNECT_PROTO => "application/connect+proto",
-    CONTENT_TYPE_TEXT_HTML_WITH_UTF8 => "text/html;charset=utf-8",
-    CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8 => "text/plain;charset=utf-8",
-    CONTENT_TYPE_TEXT_CSS_WITH_UTF8 => "text/css;charset=utf-8",
-    CONTENT_TYPE_TEXT_JS_WITH_UTF8 => "text/javascript;charset=utf-8"
 );
 
 // Authorization constants

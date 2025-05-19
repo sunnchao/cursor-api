@@ -1,17 +1,19 @@
+mod proxy_url;
+
 use crate::app::lazy::{PROXIES_FILE_PATH, SERVICE_TIMEOUT, TCP_KEEPALIVE};
 use memmap2::{MmapMut, MmapOptions};
 use parking_lot::RwLock;
-use reqwest::{Client, Proxy};
+use proxy_url::StringUrl;
+use reqwest::Client;
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::fs::OpenOptions;
-use std::str::FromStr;
-use std::sync::LazyLock;
-use std::time::Duration;
-mod proxy_url;
-use proxy_url::StringUrl;
+use std::{
+    collections::{HashMap, HashSet},
+    fs::OpenOptions,
+    str::FromStr,
+    sync::LazyLock,
+    time::Duration,
+};
 
 // 新的代理值常量
 pub const NON_PROXY: &str = "non";
@@ -21,10 +23,8 @@ pub const SYS_PROXY: &str = "sys";
 pub static PROXY_POOL: LazyLock<RwLock<ProxyPool>> = LazyLock::new(|| {
     let system_client = Client::builder()
         .https_only(true)
-        .http1_only()
         .tcp_keepalive(Duration::from_secs(*TCP_KEEPALIVE))
-        .timeout(Duration::from_secs(*SERVICE_TIMEOUT))
-        .http1_title_case_headers()
+        .connect_timeout(Duration::from_secs(*SERVICE_TIMEOUT))
         .build()
         .expect("创建默认系统客户端失败");
 
@@ -109,10 +109,8 @@ impl Proxies {
                             SingleProxy::Non,
                             Client::builder()
                                 .https_only(true)
-                                .http1_only()
                                 .tcp_keepalive(Duration::from_secs(*TCP_KEEPALIVE))
-                                .timeout(Duration::from_secs(*SERVICE_TIMEOUT))
-                                .http1_title_case_headers()
+                                .connect_timeout(Duration::from_secs(*SERVICE_TIMEOUT))
                                 .no_proxy()
                                 .build()
                                 .expect("创建无代理客户端失败"),
@@ -123,29 +121,23 @@ impl Proxies {
                             SingleProxy::Sys,
                             Client::builder()
                                 .https_only(true)
-                                .http1_only()
                                 .tcp_keepalive(Duration::from_secs(*TCP_KEEPALIVE))
-                                .timeout(Duration::from_secs(*SERVICE_TIMEOUT))
-                                .http1_title_case_headers()
+                                .connect_timeout(Duration::from_secs(*SERVICE_TIMEOUT))
                                 .build()
                                 .expect("创建默认客户端失败"),
                         );
                     }
                     SingleProxy::Url(url) => {
-                        if let Ok(proxy_obj) = Proxy::all(url.to_string()) {
-                            pool.clients.insert(
-                                (*proxy).clone(),
-                                Client::builder()
-                                    .https_only(true)
-                                    .http1_only()
-                                    .tcp_keepalive(Duration::from_secs(*TCP_KEEPALIVE))
-                                    .timeout(Duration::from_secs(*SERVICE_TIMEOUT))
-                                    .http1_title_case_headers()
-                                    .proxy(proxy_obj)
-                                    .build()
-                                    .expect("创建代理客户端失败"),
-                            );
-                        }
+                        pool.clients.insert(
+                            (*proxy).clone(),
+                            Client::builder()
+                                .https_only(true)
+                                .tcp_keepalive(Duration::from_secs(*TCP_KEEPALIVE))
+                                .connect_timeout(Duration::from_secs(*SERVICE_TIMEOUT))
+                                .proxy(url.as_proxy().expect("创建代理对象失败"))
+                                .build()
+                                .expect("创建代理客户端失败"),
+                        );
                     }
                 }
             }

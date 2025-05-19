@@ -1,22 +1,19 @@
 use crate::{
     app::{
         constant::{
-            AUTHORIZATION_BEARER_PREFIX, CONTENT_TYPE_TEXT_HTML_WITH_UTF8,
-            CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8, PKG_VERSION, ROUTE_ABOUT_PATH, ROUTE_API_PATH,
-            ROUTE_BASIC_CALIBRATION_PATH, ROUTE_BUILD_KEY_PATH, ROUTE_CONFIG_PATH,
-            ROUTE_ENV_EXAMPLE_PATH, ROUTE_GET_CHECKSUM, ROUTE_GET_HASH, ROUTE_GET_TIMESTAMP_HEADER,
-            ROUTE_HEALTH_PATH, ROUTE_LOGS_PATH, ROUTE_PROXIES_ADD_PATH, ROUTE_PROXIES_DELETE_PATH,
-            ROUTE_PROXIES_GET_PATH, ROUTE_PROXIES_PATH, ROUTE_PROXIES_SET_GENERAL_PATH,
-            ROUTE_PROXIES_SET_PATH, ROUTE_README_PATH, ROUTE_ROOT_PATH, ROUTE_STATIC_PATH,
-            ROUTE_TOKEN_UPGRADE_PATH, ROUTE_TOKENS_ADD_PATH, ROUTE_TOKENS_BY_TAG_GET_PATH,
-            ROUTE_TOKENS_DELETE_PATH, ROUTE_TOKENS_GET_PATH, ROUTE_TOKENS_PATH,
-            ROUTE_TOKENS_PROFILE_UPDATE_PATH, ROUTE_TOKENS_SET_PATH, ROUTE_TOKENS_STATUS_SET_PATH,
-            ROUTE_TOKENS_TAGS_GET_PATH, ROUTE_TOKENS_TAGS_SET_PATH, ROUTE_TOKENS_UPGRADE_PATH,
-            ROUTE_USER_INFO_PATH,
+            PKG_VERSION, ROUTE_ABOUT_PATH, ROUTE_API_PATH, ROUTE_BASIC_CALIBRATION_PATH,
+            ROUTE_BUILD_KEY_PATH, ROUTE_CONFIG_PATH, ROUTE_ENV_EXAMPLE_PATH, ROUTE_GET_CHECKSUM,
+            ROUTE_GET_HASH, ROUTE_GET_TIMESTAMP_HEADER, ROUTE_HEALTH_PATH, ROUTE_LOGS_PATH,
+            ROUTE_PROXIES_ADD_PATH, ROUTE_PROXIES_DELETE_PATH, ROUTE_PROXIES_GET_PATH,
+            ROUTE_PROXIES_PATH, ROUTE_PROXIES_SET_GENERAL_PATH, ROUTE_PROXIES_SET_PATH,
+            ROUTE_README_PATH, ROUTE_ROOT_PATH, ROUTE_STATIC_PATH, ROUTE_TOKEN_UPGRADE_PATH,
+            ROUTE_TOKENS_ADD_PATH, ROUTE_TOKENS_BY_TAG_GET_PATH, ROUTE_TOKENS_DELETE_PATH,
+            ROUTE_TOKENS_GET_PATH, ROUTE_TOKENS_PATH, ROUTE_TOKENS_PROFILE_UPDATE_PATH,
+            ROUTE_TOKENS_SET_PATH, ROUTE_TOKENS_STATUS_SET_PATH, ROUTE_TOKENS_TAGS_GET_PATH,
+            ROUTE_TOKENS_TAGS_SET_PATH, ROUTE_TOKENS_UPGRADE_PATH, ROUTE_USER_INFO_PATH,
+            header_value_text_html_utf8, header_value_text_plain_utf8,
         },
-        lazy::{
-            AUTH_TOKEN, ROUTE_CHAT_PATH, ROUTE_MESSAGES_PATH, ROUTE_MODELS_PATH, get_start_time,
-        },
+        lazy::{ROUTE_CHAT_PATH, ROUTE_MODELS_PATH, get_start_time},
         model::{AppConfig, AppState, PageContent},
     },
     common::model::{
@@ -30,12 +27,11 @@ use axum::{
     body::Body,
     extract::State,
     http::{
-        HeaderMap, StatusCode,
+        StatusCode,
         header::{CONTENT_TYPE, LOCATION},
     },
     response::{IntoResponse, Response},
 };
-use reqwest::header::AUTHORIZATION;
 use std::sync::Arc;
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use tokio::sync::Mutex;
@@ -48,20 +44,19 @@ pub async fn handle_root() -> impl IntoResponse {
             .body(Body::empty())
             .unwrap(),
         PageContent::Text(content) => Response::builder()
-            .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8)
+            .header(CONTENT_TYPE, header_value_text_plain_utf8())
             .body(Body::from(content))
             .unwrap(),
         PageContent::Html(content) => Response::builder()
-            .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_HTML_WITH_UTF8)
+            .header(CONTENT_TYPE, header_value_text_html_utf8())
             .body(Body::from(content))
             .unwrap(),
     }
 }
 
-static ENDPOINTS: std::sync::LazyLock<[&'static str; 34]> = std::sync::LazyLock::new(|| {
+static ENDPOINTS: std::sync::LazyLock<[&'static str; 33]> = std::sync::LazyLock::new(|| {
     [
         &*ROUTE_CHAT_PATH,
-        &*ROUTE_MESSAGES_PATH,
         &*ROUTE_MODELS_PATH,
         ROUTE_TOKENS_PATH,
         ROUTE_TOKENS_GET_PATH,
@@ -97,20 +92,12 @@ static ENDPOINTS: std::sync::LazyLock<[&'static str; 34]> = std::sync::LazyLock:
     ]
 });
 
-pub async fn handle_health(
-    State(state): State<Arc<Mutex<AppState>>>,
-    headers: HeaderMap,
-) -> Json<HealthCheckResponse> {
+pub async fn handle_health(State(state): State<Arc<Mutex<AppState>>>) -> Json<HealthCheckResponse> {
     let start_time = get_start_time();
     let uptime = (chrono::Local::now() - start_time).num_seconds();
 
     // 先检查 headers 是否包含有效的认证信息
-    let stats = if headers
-        .get(AUTHORIZATION)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|h| h.strip_prefix(AUTHORIZATION_BEARER_PREFIX))
-        .is_some_and(|token| token == AUTH_TOKEN.as_str())
-    {
+    let stats = {
         // 只有在需要系统信息时才创建实例
         let mut sys = System::new_with_specifics(
             RefreshKind::nothing()
@@ -135,7 +122,7 @@ pub async fn handle_health(
 
         let state = state.lock().await;
 
-        Some(SystemStats {
+        SystemStats {
             started: start_time.to_string(),
             total_requests: state.request_manager.total_requests,
             active_requests: state.request_manager.active_requests,
@@ -147,9 +134,7 @@ pub async fn handle_health(
                     usage: cpu_usage, // CPU 使用率(百分比)
                 },
             },
-        })
-    } else {
-        None
+        }
     };
 
     Json(HealthCheckResponse {

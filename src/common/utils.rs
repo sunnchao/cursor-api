@@ -1,5 +1,4 @@
 mod checksum;
-use std::time::Instant;
 
 use ::base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 pub use checksum::*;
@@ -30,8 +29,8 @@ use crate::{
         },
         config::key_config,
         constant::{
-            ANTHROPIC, CREATED, CURSOR, DEEPSEEK, GOOGLE, MODEL_OBJECT, OPENAI, UNKNOWN, XAI,
-            calculate_display_name_v3,
+            ANTHROPIC, CREATED, CURSOR, DEEPSEEK, DEFAULT, GOOGLE, MODEL_OBJECT, OPENAI, UNKNOWN,
+            XAI, calculate_display_name_v3,
         },
         model::{Model, Usage},
     },
@@ -108,20 +107,6 @@ impl TrimNewlines for String {
             }
         }
         self
-    }
-}
-
-pub trait InstantExt {
-    fn duration_as_secs_f64(&mut self) -> f64;
-}
-
-impl InstantExt for Instant {
-    #[inline]
-    fn duration_as_secs_f64(&mut self) -> f64 {
-        let now = Instant::now();
-        let duration = now.duration_since(*self);
-        *self = now;
-        duration.as_secs_f64()
     }
 }
 
@@ -261,6 +246,12 @@ pub async fn get_available_models(
                     }
                 };
                 let display_name = calculate_display_name_v3(&model.name);
+                let is_thinking = model.supports_thinking();
+                let is_image = if model.name.as_str() == DEFAULT {
+                    true
+                } else {
+                    model.supports_images()
+                };
 
                 Model {
                     id: crate::leak::intern_string(model.name),
@@ -268,6 +259,8 @@ pub async fn get_available_models(
                     created: CREATED,
                     object: MODEL_OBJECT,
                     owned_by,
+                    is_thinking,
+                    is_image,
                 }
             })
             .collect(),
@@ -276,9 +269,9 @@ pub async fn get_available_models(
 
 pub async fn get_token_usage(
     client: Client,
-    auth_token: &str,
-    checksum: &str,
-    client_key: &str,
+    auth_token: String,
+    checksum: String,
+    client_key: String,
     timezone: &'static str,
     is_pri: bool,
     usage_uuid: String,
@@ -287,9 +280,9 @@ pub async fn get_token_usage(
         let trace_id = uuid::Uuid::new_v4().to_string();
         let client = super::client::build_request(super::client::AiServiceRequest {
             client,
-            auth_token,
-            checksum,
-            client_key,
+            auth_token: &auth_token,
+            checksum: &checksum,
+            client_key: &client_key,
             url: cursor_api2_token_usage_url(is_pri),
             is_stream: false,
             timezone,
@@ -449,13 +442,13 @@ pub fn token_to_tokeninfo(
 }
 
 /// 将 TokenInfo 转换为 JWT token
-pub fn tokeninfo_to_token(mut info: key_config::TokenInfo) -> Option<(String, String, Client)> {
+pub fn tokeninfo_to_token(info: key_config::TokenInfo) -> Option<(String, String, Client)> {
     // 构建 payload
     let payload = TokenPayload {
-        sub: std::mem::take(&mut info.sub),
+        sub: info.sub,
         exp: info.end,
-        randomness: std::mem::take(&mut info.randomness),
-        time: info.start.to_string(), // exp - 30000天
+        randomness: info.randomness,
+        time: info.start.to_string(),
         iss: ISSUER.to_string(),
         scope: SCOPE.to_string(),
         aud: AUDIENCE.to_string(),

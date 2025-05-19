@@ -84,7 +84,8 @@ pub struct RequestLog {
 pub struct Chain {
     #[serde(skip_serializing_if = "Prompt::is_none")]
     pub prompt: Prompt,
-    pub delays: Vec<(String, f64)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delays: Option<(String, Vec<(u32, f32)>)>,
     #[serde(skip_serializing_if = "OptionUsage::is_none")]
     pub usage: OptionUsage,
 }

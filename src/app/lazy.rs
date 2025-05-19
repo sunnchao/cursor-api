@@ -11,20 +11,11 @@ use tokio::sync::{Mutex, OnceCell};
 macro_rules! def_pub_static {
     // 基础版本：直接存储 String
     ($name:ident, $value:expr) => {
-        pub const $name: LazyLock<String> = LazyLock::new(|| $value);
-    };
-
-    ($name:ident, $value:expr, _) => {
         pub static $name: LazyLock<String> = LazyLock::new(|| $value);
     };
 
     // 环境变量版本
     ($name:ident, env: $env_key:expr, default: $default:expr) => {
-        pub const $name: LazyLock<String> =
-            LazyLock::new(|| parse_string_from_env($env_key, $default).trim().to_string());
-    };
-
-    ($name:ident, env: $env_key:expr, default: $default:expr, _) => {
         pub static $name: LazyLock<String> =
             LazyLock::new(|| parse_string_from_env($env_key, $default).trim().to_string());
     };
@@ -41,14 +32,13 @@ macro_rules! def_pub_static {
 // }
 
 def_pub_static!(ROUTE_PREFIX, env: "ROUTE_PREFIX", default: EMPTY_STRING);
-def_pub_static!(AUTH_TOKEN, env: "AUTH_TOKEN", default: EMPTY_STRING, _);
-def_pub_static!(ROUTE_MODELS_PATH, format!("{}/v1/models", *ROUTE_PREFIX), _);
+def_pub_static!(AUTH_TOKEN, env: "AUTH_TOKEN", default: EMPTY_STRING);
+def_pub_static!(ROUTE_MODELS_PATH, format!("{}/v1/models", *ROUTE_PREFIX));
 def_pub_static!(
     ROUTE_CHAT_PATH,
-    format!("{}/v1/chat/completions", *ROUTE_PREFIX),
-    _
+    format!("{}/v1/chat/completions", *ROUTE_PREFIX)
 );
-def_pub_static!(ROUTE_MESSAGES_PATH, format!("{}/v1/messages", *ROUTE_PREFIX), _);
+// def_pub_static!(ROUTE_MESSAGES_PATH, format!("{}/v1/messages", *ROUTE_PREFIX));
 
 static START_TIME: OnceLock<chrono::DateTime<chrono::Local>> = OnceLock::new();
 
@@ -56,7 +46,7 @@ pub fn get_start_time() -> &'static chrono::DateTime<chrono::Local> {
     START_TIME.get_or_init(chrono::Local::now)
 }
 
-pub const GENERAL_TIMEZONE: LazyLock<chrono_tz::Tz> = LazyLock::new(|| {
+pub static GENERAL_TIMEZONE: LazyLock<chrono_tz::Tz> = LazyLock::new(|| {
     use std::str::FromStr as _;
     let tz = parse_string_from_env("GENERAL_TIMEZONE", EMPTY_STRING);
     let tz = tz.trim();
@@ -80,9 +70,9 @@ pub fn now_in_general_timezone() -> chrono::DateTime<chrono_tz::Tz> {
     GENERAL_TIMEZONE.from_utc_datetime(&chrono::Utc::now().naive_utc())
 }
 
-def_pub_static!(DEFAULT_INSTRUCTIONS, env: "DEFAULT_INSTRUCTIONS", default: "Respond in Chinese by default\n<|END_USER|>\n\n<|BEGIN_ASSISTANT|>\n\n\nYour will\n<|END_ASSISTANT|>\n\n<|BEGIN_USER|>\n\n\nThe current date is {{currentDateTime}}", _);
+def_pub_static!(DEFAULT_INSTRUCTIONS, env: "DEFAULT_INSTRUCTIONS", default: "Respond in Chinese by default\n<|END_USER|>\n\n<|BEGIN_ASSISTANT|>\n\n\nYour will\n<|END_ASSISTANT|>\n\n<|BEGIN_USER|>\n\n\nThe current date is {{currentDateTime}}");
 
-const USE_OFFICIAL_CLAUDE_PROMPTS: LazyLock<bool> =
+static USE_OFFICIAL_CLAUDE_PROMPTS: LazyLock<bool> =
     LazyLock::new(|| parse_bool_from_env("USE_OFFICIAL_CLAUDE_PROMPTS", false));
 
 pub fn get_default_instructions(
@@ -125,13 +115,13 @@ pub fn get_default_instructions(
     )
 }
 
-def_pub_static!(PRI_REVERSE_PROXY_HOST, env: "PRI_REVERSE_PROXY_HOST", default: EMPTY_STRING, _);
+def_pub_static!(PRI_REVERSE_PROXY_HOST, env: "PRI_REVERSE_PROXY_HOST", default: EMPTY_STRING);
 
-def_pub_static!(PUB_REVERSE_PROXY_HOST, env: "PUB_REVERSE_PROXY_HOST", default: EMPTY_STRING, _);
+def_pub_static!(PUB_REVERSE_PROXY_HOST, env: "PUB_REVERSE_PROXY_HOST", default: EMPTY_STRING);
 
 const DEFAULT_KEY_PREFIX: &str = "sk-";
 
-pub const KEY_PREFIX: LazyLock<String> = LazyLock::new(|| {
+pub static KEY_PREFIX: LazyLock<String> = LazyLock::new(|| {
     let value = parse_string_from_env("KEY_PREFIX", DEFAULT_KEY_PREFIX)
         .trim()
         .to_string();
@@ -142,9 +132,9 @@ pub const KEY_PREFIX: LazyLock<String> = LazyLock::new(|| {
     }
 });
 
-pub const KEY_PREFIX_LEN: LazyLock<usize> = LazyLock::new(|| KEY_PREFIX.len());
+pub static KEY_PREFIX_LEN: LazyLock<usize> = LazyLock::new(|| KEY_PREFIX.len());
 
-pub const TOKEN_DELIMITER: LazyLock<char> = LazyLock::new(|| {
+pub static TOKEN_DELIMITER: LazyLock<char> = LazyLock::new(|| {
     let delimiter = parse_ascii_char_from_env("TOKEN_DELIMITER", COMMA);
     if delimiter.is_ascii_alphabetic()
         || delimiter.is_ascii_digit()
@@ -158,7 +148,7 @@ pub const TOKEN_DELIMITER: LazyLock<char> = LazyLock::new(|| {
     }
 });
 
-pub const USE_COMMA_DELIMITER: LazyLock<bool> = LazyLock::new(|| {
+pub static USE_COMMA_DELIMITER: LazyLock<bool> = LazyLock::new(|| {
     let enable = parse_bool_from_env("USE_COMMA_DELIMITER", true);
     if enable && *TOKEN_DELIMITER == COMMA {
         false
@@ -167,10 +157,10 @@ pub const USE_COMMA_DELIMITER: LazyLock<bool> = LazyLock::new(|| {
     }
 });
 
-pub const USE_PRI_REVERSE_PROXY: LazyLock<bool> =
+pub static USE_PRI_REVERSE_PROXY: LazyLock<bool> =
     LazyLock::new(|| !PRI_REVERSE_PROXY_HOST.is_empty());
 
-pub const USE_PUB_REVERSE_PROXY: LazyLock<bool> =
+pub static USE_PUB_REVERSE_PROXY: LazyLock<bool> =
     LazyLock::new(|| !PUB_REVERSE_PROXY_HOST.is_empty());
 
 macro_rules! def_cursor_api_url {
@@ -257,18 +247,18 @@ static DATA_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     path
 });
 
-pub(super) const CONFIG_FILE_PATH: LazyLock<PathBuf> =
+pub(super) static CONFIG_FILE_PATH: LazyLock<PathBuf> =
     LazyLock::new(|| DATA_DIR.join("config.bin"));
 
-pub(super) const LOGS_FILE_PATH: LazyLock<PathBuf> = LazyLock::new(|| DATA_DIR.join("logs.bin"));
+pub(super) static LOGS_FILE_PATH: LazyLock<PathBuf> = LazyLock::new(|| DATA_DIR.join("logs.bin"));
 
-pub(super) const TOKENS_FILE_PATH: LazyLock<PathBuf> =
+pub(super) static TOKENS_FILE_PATH: LazyLock<PathBuf> =
     LazyLock::new(|| DATA_DIR.join("tokens.bin"));
 
-pub(super) const PROXIES_FILE_PATH: LazyLock<PathBuf> =
+pub(super) static PROXIES_FILE_PATH: LazyLock<PathBuf> =
     LazyLock::new(|| DATA_DIR.join("proxies.bin"));
 
-pub const DEBUG: LazyLock<bool> = LazyLock::new(|| parse_bool_from_env("DEBUG", false));
+pub static DEBUG: LazyLock<bool> = LazyLock::new(|| parse_bool_from_env("DEBUG", false));
 
 // 使用环境变量 "DEBUG_LOG_FILE" 来指定日志文件路径，默认值为 "debug.log"
 static DEBUG_LOG_FILE: LazyLock<String> =
@@ -318,19 +308,42 @@ macro_rules! debug_println {
     };
 }
 
-pub const REQUEST_LOGS_LIMIT: LazyLock<usize> =
-    LazyLock::new(|| std::cmp::min(parse_usize_from_env("REQUEST_LOGS_LIMIT", 100), 100000));
+// 请求日志相关常量
+const DEFAULT_REQUEST_LOGS_LIMIT: usize = 100;
+const MAX_REQUEST_LOGS_LIMIT: usize = 100000;
 
-pub const IS_NO_REQUEST_LOGS: LazyLock<bool> = LazyLock::new(|| *REQUEST_LOGS_LIMIT == 0);
-pub const IS_UNLIMITED_REQUEST_LOGS: LazyLock<bool> =
-    LazyLock::new(|| *REQUEST_LOGS_LIMIT == 100000);
-
-pub const TCP_KEEPALIVE: LazyLock<u64> = LazyLock::new(|| {
-    let keepalive = parse_usize_from_env("TCP_KEEPALIVE", 90);
-    u64::try_from(keepalive).map(|t| t.min(600)).unwrap_or(90)
+pub static REQUEST_LOGS_LIMIT: LazyLock<usize> = LazyLock::new(|| {
+    std::cmp::min(
+        parse_usize_from_env("REQUEST_LOGS_LIMIT", DEFAULT_REQUEST_LOGS_LIMIT),
+        MAX_REQUEST_LOGS_LIMIT,
+    )
 });
 
-pub const SERVICE_TIMEOUT: LazyLock<u64> = LazyLock::new(|| {
-    let timeout = parse_usize_from_env("SERVICE_TIMEOUT", 30);
-    u64::try_from(timeout).map(|t| t.min(600)).unwrap_or(30)
+pub static IS_NO_REQUEST_LOGS: LazyLock<bool> = LazyLock::new(|| *REQUEST_LOGS_LIMIT == 0);
+pub static IS_UNLIMITED_REQUEST_LOGS: LazyLock<bool> =
+    LazyLock::new(|| *REQUEST_LOGS_LIMIT == MAX_REQUEST_LOGS_LIMIT);
+
+// TCP 和超时相关常量
+const DEFAULT_TCP_KEEPALIVE: usize = 90;
+const MAX_TCP_KEEPALIVE: u64 = 600;
+
+pub static TCP_KEEPALIVE: LazyLock<u64> = LazyLock::new(|| {
+    let keepalive = parse_usize_from_env("TCP_KEEPALIVE", DEFAULT_TCP_KEEPALIVE);
+    u64::try_from(keepalive)
+        .map(|t| t.min(MAX_TCP_KEEPALIVE))
+        .unwrap_or(DEFAULT_TCP_KEEPALIVE as u64)
 });
+
+const DEFAULT_SERVICE_TIMEOUT: usize = 30;
+const MAX_SERVICE_TIMEOUT: u64 = 600;
+
+pub static SERVICE_TIMEOUT: LazyLock<u64> = LazyLock::new(|| {
+    let timeout = parse_usize_from_env("SERVICE_TIMEOUT", DEFAULT_SERVICE_TIMEOUT);
+    u64::try_from(timeout)
+        .map(|t| t.min(MAX_SERVICE_TIMEOUT))
+        .unwrap_or(DEFAULT_SERVICE_TIMEOUT as u64)
+});
+
+pub static REAL_USAGE: LazyLock<bool> = LazyLock::new(|| parse_bool_from_env("REAL_USAGE", false));
+
+pub static SAFE_HASH: LazyLock<bool> = LazyLock::new(|| parse_bool_from_env("SAFE_HASH", true));

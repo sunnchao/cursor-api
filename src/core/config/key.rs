@@ -3,19 +3,19 @@
 pub struct KeyConfig {
     /// 认证令牌（必需）
     #[prost(message, optional, tag = "1")]
-    pub auth_token: ::core::option::Option<key_config::TokenInfo>,
+    pub auth_token: Option<key_config::TokenInfo>,
     /// 是否禁用图片处理能力
     #[prost(bool, optional, tag = "4")]
-    pub disable_vision: ::core::option::Option<bool>,
+    pub disable_vision: Option<bool>,
     /// 是否启用慢速池
     #[prost(bool, optional, tag = "5")]
-    pub enable_slow_pool: ::core::option::Option<bool>,
+    pub enable_slow_pool: Option<bool>,
     /// 使用量检查模型规则
     #[prost(message, optional, tag = "6")]
-    pub usage_check_models: ::core::option::Option<key_config::UsageCheckModel>,
+    pub usage_check_models: Option<key_config::UsageCheckModel>,
     /// 包含网络引用
     #[prost(bool, optional, tag = "7")]
-    pub include_web_references: ::core::option::Option<bool>,
+    pub include_web_references: Option<bool>,
 }
 /// Nested message and enum types in `KeyConfig`.
 pub mod key_config {
@@ -24,7 +24,7 @@ pub mod key_config {
     pub struct TokenInfo {
         /// 用户标识符
         #[prost(string, tag = "1")]
-        pub sub: ::prost::alloc::string::String,
+        pub sub: String,
         /// 生成时间（Unix 时间戳）
         #[prost(int64, tag = "2")]
         pub start: i64,
@@ -33,19 +33,19 @@ pub mod key_config {
         pub end: i64,
         /// 随机字符串
         #[prost(string, tag = "4")]
-        pub randomness: ::prost::alloc::string::String,
+        pub randomness: String,
         /// 签名
         #[prost(string, tag = "5")]
-        pub signature: ::prost::alloc::string::String,
+        pub signature: String,
         /// 机器ID的SHA256哈希值
         #[prost(bytes = "vec", tag = "6")]
-        pub machine_id: ::prost::alloc::vec::Vec<u8>,
+        pub machine_id: Vec<u8>,
         /// MAC地址的SHA256哈希值
         #[prost(bytes = "vec", tag = "7")]
-        pub mac_id: ::prost::alloc::vec::Vec<u8>,
+        pub mac_id: Vec<u8>,
         /// 代理名称
         #[prost(string, optional, tag = "8")]
-        pub proxy_name: ::core::option::Option<::prost::alloc::string::String>,
+        pub proxy_name: Option<String>,
     }
     /// 使用量检查模型规则
     #[derive(Clone, PartialEq, ::prost::Message)]
@@ -55,7 +55,7 @@ pub mod key_config {
         pub r#type: i32,
         /// 模型 ID 列表，当 type 为 TYPE_CUSTOM 时生效
         #[prost(string, repeated, tag = "2")]
-        pub model_ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+        pub model_ids: Vec<String>,
     }
     /// Nested message and enum types in `UsageCheckModel`.
     pub mod usage_check_model {
@@ -88,7 +88,7 @@ pub mod key_config {
                 }
             }
             /// Creates an enum from field names used in the ProtoBuf definition.
-            pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            pub fn from_str_name(value: &str) -> Option<Self> {
                 match value {
                     "TYPE_DEFAULT" => Some(Self::Default),
                     "TYPE_DISABLED" => Some(Self::Disabled),

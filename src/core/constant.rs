@@ -66,6 +66,7 @@ def_pub_const!(
     O1 => "o1",
     O3_MINI => "o3-mini",
     GPT_4_5_PREVIEW => "gpt-4.5-preview",
+    GPT_4_1 => "gpt-4.1",
 
     // Cursor 模型
     CURSOR_FAST => "cursor-fast",
@@ -73,7 +74,6 @@ def_pub_const!(
 
     // Google 模型
     GEMINI_1_5_FLASH_500K => "gemini-1.5-flash-500k",
-    GEMINI_EXP_1206 => "gemini-exp-1206",
     GEMINI_2_0_PRO_EXP => "gemini-2.0-pro-exp",
     GEMINI_2_5_PRO_EXP_03_25 => "gemini-2.5-pro-exp-03-25",
     GEMINI_2_5_PRO_MAX => "gemini-2.5-pro-max",
@@ -83,9 +83,12 @@ def_pub_const!(
     // Deepseek 模型
     DEEPSEEK_V3 => "deepseek-v3",
     DEEPSEEK_R1 => "deepseek-r1",
+    DEEPSEEK_V3_1 => "deepseek-v3.1",
 
     // XAI 模型
     GROK_2 => "grok-2",
+    GROK_3_BETA => "grok-3-beta",
+    GROK_3_MINI_BETA => "grok-3-mini-beta",
 
     // 未知模型
     DEFAULT => "default",
@@ -103,6 +106,8 @@ macro_rules! create_models {
                             created: CREATED,
                             object: MODEL_OBJECT,
                             owned_by: $owner,
+                            is_thinking: SUPPORTED_THINKING_MODELS.contains(&$model),
+                            is_image: SUPPORTED_IMAGE_MODELS.contains(&$model),
                         },
                     )*
                 ]),
@@ -139,12 +144,8 @@ impl Models {
     // }
 
     // 查找模型并返回其 ID
-    pub fn find_id(model: &str) -> Option<&'static str> {
-        Self::read()
-            .models
-            .iter()
-            .find(|m| m.id == model)
-            .map(|m| m.id)
+    pub fn find_id(model: &str) -> Option<Model> {
+        Self::read().models.iter().find(|m| m.id == model).copied()
     }
 
     // 返回所有模型 ID 的列表
@@ -228,22 +229,21 @@ create_models!(
     DEEPSEEK_R1 => DEEPSEEK,
     O3_MINI => OPENAI,
     GROK_2 => XAI,
+    DEEPSEEK_V3_1 => DEEPSEEK,
+    GROK_3_BETA => XAI,
+    GROK_3_MINI_BETA => XAI,
+    GPT_4_1 => OPENAI,
 );
 
-pub const USAGE_CHECK_MODELS: [&str; 13] = [
-    CLAUDE_3_5_SONNET,
-    CLAUDE_3_7_SONNET,
-    CLAUDE_3_7_SONNET_THINKING,
-    GEMINI_EXP_1206,
-    GPT_4,
-    GPT_4_TURBO_2024_04_09,
-    GPT_4O,
-    CLAUDE_3_5_HAIKU,
-    GPT_4O_128K,
-    GEMINI_1_5_FLASH_500K,
-    CLAUDE_3_HAIKU_200K,
-    CLAUDE_3_5_SONNET_200K,
-    DEEPSEEK_R1,
+pub const FREE_MODELS: [&str; 8] = [
+    CURSOR_FAST,
+    CURSOR_SMALL,
+    GPT_4O_MINI,
+    GPT_3_5_TURBO,
+    DEEPSEEK_V3,
+    DEEPSEEK_V3_1,
+    GROK_3_MINI_BETA,
+    GPT_4_1,
 ];
 
 pub const LONG_CONTEXT_MODELS: [&str; 4] = [
@@ -253,14 +253,37 @@ pub const LONG_CONTEXT_MODELS: [&str; 4] = [
     CLAUDE_3_5_SONNET_200K,
 ];
 
-pub const SUPPORTED_IMAGE_MODELS: [&str; 9] = [
+const SUPPORTED_THINKING_MODELS: [&str; 10] = [
+    CLAUDE_3_7_SONNET_THINKING,
+    CLAUDE_3_7_SONNET_THINKING_MAX,
+    O1_MINI,
+    O1_PREVIEW,
+    O1,
+    GEMINI_2_5_PRO_EXP_03_25,
+    GEMINI_2_5_PRO_MAX,
+    GEMINI_2_0_FLASH_THINKING_EXP,
+    DEEPSEEK_R1,
+    O3_MINI,
+];
+
+const SUPPORTED_IMAGE_MODELS: [&str; 19] = [
+    DEFAULT,
     CLAUDE_3_5_SONNET,
     CLAUDE_3_7_SONNET,
     CLAUDE_3_7_SONNET_THINKING,
-    GPT_4O,
-    GPT_4O_MINI,
-    DEFAULT,
-    CLAUDE_3_OPUS,
-    CLAUDE_3_5_HAIKU,
+    CLAUDE_3_7_SONNET_MAX,
+    CLAUDE_3_7_SONNET_THINKING_MAX,
     GPT_4,
+    GPT_4O,
+    GPT_4_5_PREVIEW,
+    CLAUDE_3_OPUS,
+    GPT_4_TURBO_2024_04_09,
+    GPT_4O_128K,
+    CLAUDE_3_HAIKU_200K,
+    CLAUDE_3_5_SONNET_200K,
+    GPT_4O_MINI,
+    CLAUDE_3_5_HAIKU,
+    GEMINI_2_5_PRO_EXP_03_25,
+    GEMINI_2_5_PRO_MAX,
+    GPT_4_1,
 ];
