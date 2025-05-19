@@ -108,6 +108,11 @@
     </div>
 
     <div class="form-group">
+      <label>代理名称:</label>
+      <input type="text" id="proxyName" placeholder="输入代理名称（可选）">
+    </div>
+
+    <div class="form-group">
       <label>包含网络引用:</label>
       <select id="includeWebReferences">
         <option value="">跟随全局</option>
@@ -178,6 +183,7 @@
 
       const data = {
         auth_token: dataToken,
+        proxy_name: document.getElementById('proxyName').value || undefined,
         disable_vision: parseBooleanFromString(document.getElementById('disableVision').value, undefined),
         enable_slow_pool: parseBooleanFromString(document.getElementById('enableSlowPool').value, undefined),
         usage_check_models: type ? {
@@ -217,6 +223,7 @@
     function clearForm() {
       document.getElementById('authToken').value = '';
       document.getElementById('dataToken').value = '';
+      document.getElementById('proxyName').value = '';
       document.getElementById('disableVision').value = '';
       document.getElementById('enableSlowPool').value = '';
       document.getElementById('usageCheckType').value = 'default';

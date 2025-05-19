@@ -65,7 +65,8 @@ fn generate_sha256_hash() -> String {
 }
 
 fn generate_sqm_id() -> String {
-    format!("{{{}}}", Uuid::new_v4().to_string().to_uppercase())
+    use hex::ToHex as _;
+    Uuid::new_v4().braced().encode_hex_upper()
 }
 
 fn generate_device_id() -> String {

@@ -4,9 +4,16 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 #[cfg(not(any(feature = "use-minified")))]
 use std::fs;
+#[cfg(not(debug_assertions))]
+#[cfg(feature = "__preview")]
+use std::fs::File;
 use std::io::Result;
+#[cfg(not(debug_assertions))]
+#[cfg(feature = "__preview")]
+use std::io::{Read, Write};
 #[cfg(not(any(feature = "use-minified")))]
 use std::path::Path;
+#[cfg(not(any(feature = "use-minified")))]
 use std::path::PathBuf;
 #[cfg(not(any(feature = "use-minified")))]
 use std::process::Command;
@@ -116,7 +123,7 @@ fn minify_assets() -> Result<()> {
     let files_to_update: Vec<_> = current_hashes
         .iter()
         .filter(|(path, current_hash)| {
-            let is_readme = path.file_name().map_or(false, |f| f == "README.md");
+            let is_readme = path.file_name().is_some_and(|f| f == "README.md");
             let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
             // 为 README.md 和其他文件使用不同的输出路径检查
@@ -136,9 +143,7 @@ fn minify_assets() -> Result<()> {
             }
 
             // 检查原始文件是否发生变化
-            saved_hashes
-                .get(*path)
-                .map_or(true, |saved_hash| saved_hash != *current_hash)
+            saved_hashes.get(*path) != Some(*current_hash)
         })
         .map(|(path, _)| path.file_name().unwrap().to_string_lossy().into_owned())
         .collect();
@@ -149,6 +154,7 @@ fn minify_assets() -> Result<()> {
     }
 
     println!("cargo:warning=Minifying {} files...", files_to_update.len());
+    println!("cargo:warning={}", files_to_update.join(" "));
 
     // 运行压缩脚本
     let status = Command::new("node")
@@ -166,34 +172,92 @@ fn minify_assets() -> Result<()> {
     Ok(())
 }
 
-fn main() -> Result<()> {
-    // Proto 文件处理
-    println!("cargo:rerun-if-changed=src/chat/aiserver/v1/lite.proto");
-    println!("cargo:rerun-if-changed=src/chat/config/key.proto");
-    // 获取环境变量 PROTOC
-    let protoc_path = match std::env::var_os("PROTOC") {
-        Some(path) => PathBuf::from(path),
-        None => {
-            println!("cargo:warning=PROTOC environment variable not set, using default protoc.");
-            // 如果 PROTOC 未设置，则返回一个空的 PathBuf，prost-build 会尝试使用默认的 protoc
-            PathBuf::new()
+/**
+ * 更新版本号函数
+ * 此函数会读取 VERSION 文件中的数字，将其加1，然后保存回文件
+ * 如果 VERSION 文件不存在或为空，将从1开始计数
+ * 只在 release 模式下执行，debug/dev 模式下完全跳过
+ */
+#[cfg(not(debug_assertions))]
+#[cfg(feature = "__preview")]
+fn update_version() -> Result<()> {
+    let version_path = "VERSION";
+    // VERSION文件的监控已经在main函数中添加，此处无需重复
+
+    // 读取当前版本号
+    let mut version = String::new();
+    let mut file = match File::open(version_path) {
+        Ok(file) => file,
+        Err(_) => {
+            // 如果文件不存在或无法打开，从1开始
+            println!("cargo:warning=VERSION file not found, creating with initial value 1");
+            let mut new_file = File::create(version_path)?;
+            new_file.write_all(b"1")?;
+            return Ok(());
         }
     };
-    let mut config = prost_build::Config::new();
-    // 如果 protoc_path 不为空，则配置使用指定的 protoc
-    if !protoc_path.as_os_str().is_empty() {
-        config.protoc_executable(protoc_path);
-    }
+
+    file.read_to_string(&mut version)?;
+
+    // 确保版本号是有效数字
+    let version_num = match version.trim().parse::<u64>() {
+        Ok(num) => num,
+        Err(_) => {
+            println!("cargo:warning=Invalid version number in VERSION file. Setting to 1.");
+            let mut file = File::create(version_path)?;
+            file.write_all(b"1")?;
+            return Ok(());
+        }
+    };
+
+    // 版本号加1
+    let new_version = version_num + 1;
+    println!(
+        "cargo:warning=Release build - bumping version from {} to {}",
+        version_num, new_version
+    );
+
+    // 写回文件
+    let mut file = File::create(version_path)?;
+    file.write_all(new_version.to_string().as_bytes())?;
+
+    Ok(())
+}
+
+fn main() -> Result<()> {
+    // 更新版本号 - 只在 release 构建时执行
+    #[cfg(not(debug_assertions))]
+    #[cfg(feature = "__preview")]
+    update_version()?;
+
+    // Proto 文件处理
+    // println!("cargo:rerun-if-changed=src/core/aiserver/v1/lite.proto");
+    // println!("cargo:rerun-if-changed=src/core/config/key.proto");
+    // 获取环境变量 PROTOC
+    // let protoc_path = match std::env::var_os("PROTOC") {
+    //     Some(path) => PathBuf::from(path),
+    //     None => {
+    //         println!("cargo:warning=PROTOC environment variable not set, using default protoc.");
+    //         // 如果 PROTOC 未设置，则返回一个空的 PathBuf，prost-build 会尝试使用默认的 protoc
+    //         PathBuf::new()
+    //     }
+    // };
+    // let mut config = prost_build::Config::new();
+    // // 如果 protoc_path 不为空，则配置使用指定的 protoc
+    // if !protoc_path.as_os_str().is_empty() {
+    //     config.protoc_executable(protoc_path);
+    // }
     // config.type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]");
-    config
-        .compile_protos(
-            &["src/chat/aiserver/v1/lite.proto"],
-            &["src/chat/aiserver/v1/"],
-        )
-        .unwrap();
-    config
-        .compile_protos(&["src/chat/config/key.proto"], &["src/chat/config/"])
-        .unwrap();
+    // config.enum_attribute(".aiserver.v1", "#[allow(clippy::enum_variant_names)]");
+    // config
+    //     .compile_protos(
+    //         &["src/core/aiserver/v1/lite.proto"],
+    //         &["src/core/aiserver/v1/"],
+    //     )
+    //     .unwrap();
+    // config
+    //     .compile_protos(&["src/core/config/key.proto"], &["src/core/config/"])
+    //     .unwrap();
 
     // 静态资源文件处理
     println!("cargo:rerun-if-changed=scripts/minify.js");
@@ -206,6 +270,10 @@ fn main() -> Result<()> {
     println!("cargo:rerun-if-changed=static/shared.js");
     println!("cargo:rerun-if-changed=static/tokens.html");
     println!("cargo:rerun-if-changed=README.md");
+    
+    // 只在release模式下监控VERSION文件变化
+    #[cfg(not(debug_assertions))]
+    println!("cargo:rerun-if-changed=VERSION");
 
     #[cfg(not(any(feature = "use-minified")))]
     {

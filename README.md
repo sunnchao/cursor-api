@@ -9,6 +9,8 @@
 * 本程序拥有堪比客户端原本的速度，甚至可能更快。
 * 本程序的性能是非常厉害的。
 * 根据本项目开源协议，Fork的项目不能以作者的名义进行任何形式的宣传、推广或声明。
+* 目前暂停更新（已更新约3个月,求赞助:），做不下去了都，截至当前版本(v0.1.3-rc.5.2.3)，有事联系 nav@wisdgod.com (因为有人说很难联系到作者..从v0.1.3-rc.5.2.1起添加)。
+* 推荐自部署，[官方网站](https://cc.wisdgod.com) 仅用于作者测试，不保证稳定性。
 
 ## 获取key
 
@@ -23,13 +25,12 @@
 * `PORT`: 服务器端口号（默认：3000）
 * `AUTH_TOKEN`: 认证令牌（必须，用于API认证）
 * `ROUTE_PREFIX`: 路由前缀（可选）
-* `TOKEN_LIST_FILE`: token列表文件路径（默认：.tokens）
 
 更多请查看 `/env-example`
 
 ### Token文件格式
 
-`.tokens` 文件：每行为token和checksum的对应关系：
+`.tokens` 文件(已弃用)：每行为token和checksum的对应关系：
     
 ```
 # 这里的#表示这行在下次读取要删除
@@ -44,12 +45,18 @@ token2,checksum2
 
 ### 模型列表
 
-写死了，后续也不会会支持自定义模型列表
+写死了，后续也不会会支持自定义模型列表，因为本身就支持动态更新，详见[更新模型列表说明](#更新模型列表说明)
 
 ```
+default
 claude-3.5-sonnet
+claude-3.7-sonnet
+claude-3.7-sonnet-thinking
+claude-3.7-sonnet-max
+claude-3.7-sonnet-thinking-max
 gpt-4
 gpt-4o
+gpt-4.5-preview
 claude-3-opus
 cursor-fast
 cursor-small
@@ -59,17 +66,60 @@ gpt-4o-128k
 gemini-1.5-flash-500k
 claude-3-haiku-200k
 claude-3-5-sonnet-200k
-claude-3-5-sonnet-20241022
 gpt-4o-mini
 o1-mini
 o1-preview
 o1
 claude-3.5-haiku
-gemini-exp-1206
+gemini-2.0-pro-exp
+gemini-2.5-pro-exp-03-25
+gemini-2.5-pro-max
 gemini-2.0-flash-thinking-exp
-gemini-2.0-flash-exp
+gemini-2.0-flash
 deepseek-v3
 deepseek-r1
+o3-mini
+grok-2
+deepseek-v3.1
+grok-3-beta
+grok-3-mini-beta
+gpt-4.1
+```
+
+支持思考：
+```
+claude-3.7-sonnet-thinking
+claude-3.7-sonnet-thinking-max
+o1-mini
+o1-preview
+o1
+gemini-2.5-pro-exp-03-25
+gemini-2.5-pro-max
+gemini-2.0-flash-thinking-exp
+deepseek-r1
+o3-mini
+```
+
+支持图像：
+```
+claude-3.5-sonnet
+claude-3.7-sonnet
+claude-3.7-sonnet-thinking
+claude-3.7-sonnet-max
+claude-3.7-sonnet-thinking-max
+gpt-4
+gpt-4o
+gpt-4.5-preview
+claude-3-opus
+gpt-4-turbo-2024-04-09
+gpt-4o-128k
+claude-3-haiku-200k
+claude-3-5-sonnet-200k
+gpt-4o-mini
+claude-3.5-haiku
+gemini-2.5-pro-exp-03-25
+gemini-2.5-pro-max
+gpt-4.1
 ```
 
 ## 接口说明
@@ -81,7 +131,7 @@ deepseek-r1
 * 认证方式: Bearer Token
   1. 使用环境变量 `AUTH_TOKEN` 进行认证
   2. 使用 `.token` 文件中的令牌列表进行轮询认证
-  3. 在v0.1.3-rc.3支持直接使用 token,checksum 进行认证，但未提供配置关闭
+  3. 自v0.1.3-rc.3起支持直接使用 token,checksum 进行认证，但未提供配置关闭
 
 #### 请求格式
 
@@ -102,7 +152,10 @@ deepseek-r1
       ]
     }
   ],
-  "stream": boolean
+  "stream": boolean,
+  "stream_options": {
+    "include_usage": boolean
+  }
 }
 ```
 
@@ -148,6 +201,32 @@ data: {"id":"string","object":"chat.completion.chunk","created":number,"model":"
 data: [DONE]
 ```
 
+### 获取模型列表
+
+* 接口地址: `/v1/models`
+* 请求方法: GET
+* 认证方式: Bearer Token
+
+#### 响应格式
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "string",
+      "object": "model",
+      "created": number,
+      "owned_by": "string"
+    }
+  ]
+}
+```
+
+#### 更新模型列表说明
+
+每次携带Token时都会拉取最新的模型列表，与上次更新需距离至少30分钟。
+
 ### Token管理接口
 
 #### 简易Token信息管理页面
@@ -156,7 +235,6 @@ data: [DONE]
 * 请求方法: GET
 * 响应格式: HTML页面
 * 功能: 调用下面的各种相关API的示例页面
-
 
 #### 获取Token信息
 
@@ -172,6 +250,7 @@ data: [DONE]
     {
       "token": "string",
       "checksum": "string",
+      "status": "enabled" | "disabled",
       "profile": { // 可能存在
         "usage": {
           "premium": {
@@ -194,7 +273,8 @@ data: [DONE]
             "tokens": number,
             "max_requests": number,
             "max_tokens": number
-          }
+          },
+          "start_of_month": "string"
         },
         "user": {
           "email": "string",
@@ -207,6 +287,9 @@ data: [DONE]
           "payment_id": "string",
           "days_remaining_on_trial": number
         }
+      },
+      "tags": {
+        "string": null | "string"
       }
     }
   ],
@@ -214,32 +297,61 @@ data: [DONE]
 }
 ```
 
-#### 重载Token信息
+#### 设置Token信息
 
-* 接口地址: `/tokens/reload`
-* 请求方法: POST
-* 认证方式: Bearer Token
-* 响应格式:
-
-```json
-{
-  "status": "success",
-  "tokens_count": number,
-  "message": "Token list has been reloaded"
-}
-```
-
-#### 更新Token信息
-
-* 接口地址: `/tokens/update`
+* 接口地址: `/tokens/set`
 * 请求方法: POST
 * 认证方式: Bearer Token
 * 请求格式:
 
 ```json
-{
-  "tokens": "string"  // token列表内容，将会直接覆盖 token_list 文件
-}
+[
+  {
+    "token": "string",
+    "checksum": "string",
+    "status": "enabled" | "disabled",
+    "profile": {
+      "usage": {
+        "premium": {
+          "requests": number,
+          "requests_total": number,
+          "tokens": number,
+          "max_requests": number,
+          "max_tokens": number
+        },
+        "standard": {
+          "requests": number,
+          "requests_total": number,
+          "tokens": number,
+          "max_requests": number,
+          "max_tokens": number
+        },
+        "unknown": {
+          "requests": number,
+          "requests_total": number,
+          "tokens": number,
+          "max_requests": number,
+          "max_tokens": number
+        },
+        "start_of_month": "string"
+      },
+      "user": {
+        "email": "string",
+        "name": "string",
+        "id": "string",
+        "updated_at": "string"
+      },
+      "stripe": {
+        "membership_type": "free" | "free_trial" | "pro" | "enterprise",
+        "payment_id": "string",
+        "days_remaining_on_trial": number
+      }
+    },
+    "tags": {
+      "string": null | "string"
+    }
+  }
+]
 ```
 
 * 响应格式:
@@ -260,12 +372,18 @@ data: [DONE]
 * 请求格式:
 
 ```json
-[
-  {
-    "token": "string",
-    "checksum": "string"  // 可选，如果不提供将自动生成
-  }
-]
+{
+  "tokens": [
+    {
+      "token": "string",
+      "checksum": "string"  // 可选，如果不提供将自动生成
+    }
+  ],
+  "tags": {
+    "string": null | "string"
+  },
+  "status": "enabled" | "disabled"
+}
 ```
 
 * 响应格式:
@@ -280,7 +398,7 @@ data: [DONE]
 
 #### 删除Token
 
-* 接口地址: `/tokens/delete`
+* 接口地址: `/tokens/del`
 * 请求方法: POST
 * 认证方式: Bearer Token
 * 请求格式:
@@ -308,6 +426,98 @@ data: [DONE]
   - failed_tokens: 返回未找到的token列表
   - detailed: 返回完整信息（包括updated_tokens和failed_tokens）
 
+#### 设置Tokens标签
+
+* 接口地址: `/tokens/tags/set`
+* 请求方法: POST
+* 认证方式: Bearer Token
+* 请求格式:
+
+```json
+{
+  "tokens": ["string"],
+  "tags": {
+    "string": null | "string" // 键可以为 timezone: 时区标识符 或 proxy: 代理名称
+  }
+}
+```
+
+* 响应格式:
+
+```json
+{
+  "status": "success",
+  "message": "string"  // "标签更新成功"
+}
+```
+
+#### 更新Tokens Profile
+
+* 接口地址: `/tokens/profile/update`
+* 请求方法: POST
+* 认证方式: Bearer Token
+* 请求格式:
+
+```json
+[
+  "string" // tokens
+]
+```
+
+* 响应格式:
+
+```json
+{
+  "status": "success",
+  "message": "string"  // "已更新?个令牌配置, ?个令牌更新失败"
+}
+```
+
+#### 升级Tokens
+
+* 接口地址: `/tokens/upgrade`
+* 请求方法: POST
+* 认证方式: Bearer Token
+* 请求格式:
+
+```json
+[
+  "string" // tokens
+]
+```
+
+* 响应格式:
+
+```json
+{
+  "status": "success",
+  "message": "string"  // "已升级?个令牌, ?个令牌升级失败"
+}
+```
+
+#### 设置Tokens Status
+
+* 接口地址: `/tokens/status/set`
+* 请求方法: POST
+* 认证方式: Bearer Token
+* 请求格式:
+
+```json
+{
+  "tokens": ["string"],
+  "status": "enabled" | "disabled"
+}
+```
+
+* 响应格式:
+
+```json
+{
+  "status": "success",
+  "message": "string"  // "已设置?个令牌状态, ?个令牌设置失败"
+}
+```
+
 #### 构建API Key
 
 * 接口地址: `/build-key`
@@ -318,6 +528,7 @@ data: [DONE]
 ```json
 {
   "auth_token": "string",  // 格式: {token},{checksum}
+  "proxy_name": "string",          // 可选，指定代理
   "disable_vision": boolean,       // 可选，禁用图片处理能力
   "enable_slow_pool": boolean,     // 可选，启用慢速池
   "usage_check_models": {          // 可选，使用量检查模型配置
@@ -354,7 +565,7 @@ data: [DONE]
 |------|------|
 | 提取关键信息，生成更短的密钥 | 可能存在版本兼容性问题 |
 | 支持携带自定义配置 | 增加了程序复杂度 |
-| 采用非常规编码方式，提升安全性 | |
+| 采用非常规编码方式，提升安全性 | 项目是开源的，安全性的提升相当于没有 |
 | 更容易验证Key的合法性 | |
 | 取消预校验带来轻微性能提升 | |
 
@@ -367,6 +578,165 @@ data: [DONE]
    - disabled: 禁用使用量检查
    - all: 检查所有可用模型
    - custom: 使用自定义模型列表(需在model_ids中指定)
+
+### 代理管理接口
+
+#### 简易代理信息管理页面
+
+* 接口地址: `/proxies`
+* 请求方法: GET
+* 响应格式: HTML页面
+* 功能: 调用下面的各种相关API的示例页面
+
+#### 获取代理配置信息
+
+* 接口地址: `/proxies/get`
+* 请求方法: POST
+* 响应格式:
+
+```json
+{
+  "status": "success",
+  "proxies": {
+    "proxies": {
+      "proxy_name": "non" | "sys" | "http://proxy-url",
+    },
+    "general": "string"  // 当前使用的通用代理名称
+  },
+  "proxies_count": number,
+  "general_proxy": "string",
+  "message": "string"  // 可选
+}
+```
+
+#### 设置代理配置
+
+* 接口地址: `/proxies/set`
+* 请求方法: POST
+* 请求格式:
+
+```json
+{
+  "proxies": {
+    "proxies": {
+      "proxy_name": "non" | "sys" | "http://proxy-url"
+    },
+    "general": "string"  // 要设置的通用代理名称
+  }
+}
+```
+
+* 响应格式:
+
+```json
+{
+  "status": "success",
+  "proxies_count": number,
+  "message": "代理配置已更新"
+}
+```
+
+#### 添加代理
+
+* 接口地址: `/proxies/add`
+* 请求方法: POST
+* 请求格式:
+
+```json
+{
+  "proxies": {
+    "proxy_name": "non" | "sys" | "http://proxy-url"
+  }
+}
+```
+
+* 响应格式:
+
+```json
+{
+  "status": "success",
+  "proxies_count": number,
+  "message": "string"  // "已添加 X 个新代理" 或 "没有添加新代理"
+}
+```
+
+#### 删除代理
+
+* 接口地址: `/proxies/del`
+* 请求方法: POST
+* 请求格式:
+
+```json
+{
+  "names": ["string"],  // 要删除的代理名称列表
+  "expectation": "simple" | "updated_proxies" | "failed_names" | "detailed"  // 默认为simple
+}
+```
+
+* 响应格式:
+
+```json
+{
+  "status": "success",
+  "updated_proxies": {  // 可选，根据expectation返回
+    "proxies": {
+      "proxy_name": "non" | "sys" | "http://proxy-url"
+    },
+    "general": "string"
+  },
+  "failed_names": ["string"]  // 可选，根据expectation返回，表示未找到的代理名称列表
+}
+```
+
+#### 设置通用代理
+
+* 接口地址: `/proxies/set-general`
+* 请求方法: POST
+* 请求格式:
+
+```json
+{
+  "name": "string"  // 要设置为通用代理的代理名称
+}
+```
+
+* 响应格式:
+
+```json
+{
+  "status": "success",
+  "message": "通用代理已设置"
+}
+```
+
+#### 代理类型说明
+
+* `non`: 表示不使用代理
+* `sys`: 表示使用系统代理
+* 其他: 表示具体的代理URL地址（如 `http://proxy-url`）
+
+#### 注意事项
+
+1. 代理名称必须是唯一的，添加重复名称的代理会被忽略
+2. 设置通用代理时，指定的代理名称必须存在于当前的代理配置中
+3. 删除代理时的 expectation 参数说明：
+   - simple: 只返回基本状态
+   - updated_proxies: 返回更新后的代理配置
+   - failed_names: 返回未找到的代理名称列表
+   - detailed: 返回完整信息（包括updated_proxies和failed_names）
+
+### 错误格式
+
+所有接口在发生错误时会返回统一的错误格式：
+
+```json
+{
+  "status": "error",
+  "code": number,  // 可选
+  "error": "string",  // 可选，错误详细信息
+  "message": "string"  // 错误提示信息
+}
+```
 
 ### 配置管理接口
 
@@ -401,7 +771,7 @@ data: [DONE]
   },
   "enable_dynamic_key": boolean,
   "share_token": "string",
-  "proxies": "" | "system" | "proxy1,proxy2,...",
+  // "proxies": "" | "system" | "proxy1,proxy2,...",
   "include_web_references": boolean
 }
 ```
@@ -426,7 +796,7 @@ data: [DONE]
     },
     "enable_dynamic_key": boolean,
     "share_token": "string",
-    "proxies": "" | "system" | "proxy1,proxy2,...",
+    // "proxies": "" | "system" | "proxy1,proxy2,...",
     "include_web_references": boolean
   }
 }
@@ -437,7 +807,7 @@ data: [DONE]
 ```json
 {
   "type": "default",
-  "content": "claude-3-5-sonnet-20241022,claude-3.5-sonnet,gemini-exp-1206,gpt-4,gpt-4-turbo-2024-04-09,gpt-4o,claude-3.5-haiku,gpt-4o-128k,gemini-1.5-flash-500k,claude-3-haiku-200k,claude-3-5-sonnet-200k"
+  "content": "claude-3-5-sonnet-20241022,claude-3.5-sonnet,gemini-exp-1206,gpt-4,gpt-4-turbo-2024-04-09,gpt-4o,claude-3.5-haiku,gpt-4o-128k,gemini-1.5-flash-500k,claude-3-haiku-200k,claude-3-5-sonnet-200k,deepseek-r1,claude-3.7-sonnet,claude-3.7-sonnet-thinking"
 }
 ```
 
@@ -469,26 +839,6 @@ data: [DONE]
 * 功能: 获取环境变量配置示例
 
 ### 其他接口
-
-#### 获取模型列表
-
-* 接口地址: `/v1/models`
-* 请求方法: GET
-* 响应格式:
-
-```json
-{
-  "object": "list",
-  "data": [
-    {
-      "id": "string",
-      "object": "model",
-      "created": number,
-      "owned_by": "string"
-    }
-  ]
-}
-```
 
 #### 获取一个随机hash
 
@@ -570,6 +920,28 @@ string
 * 接口地址: `/logs`
 * 请求方法: POST
 * 认证方式: Bearer Token
+* 请求格式:
+
+```json
+{
+  "query": {
+    "limit": number,             // 可选，返回记录数量限制
+    "offset": number,            // 可选，起始位置偏移量
+    "status": "string",          // 可选，按状态过滤 ("pending"/"success"/"failure")
+    "model": "string",           // 可选，按模型名称过滤（支持部分匹配）
+    "from_date": "string",       // 可选，开始日期时间，RFC3339格式
+    "to_date": "string",         // 可选，结束日期时间，RFC3339格式
+    "email": "string",           // 可选，按用户邮箱过滤（支持部分匹配）
+    "membership_type": "string", // 可选，按会员类型过滤 ("free"/"free_trial"/"pro"/"enterprise")
+    "min_total_time": number,    // 可选，最小总耗时（秒）
+    "max_total_time": number,    // 可选，最大总耗时（秒）
+    "stream": boolean,           // 可选，是否为流式请求
+    "has_error": boolean,        // 可选，是否包含错误
+    "has_chain": boolean         // 可选，是否包含对话链
+  }
+}
+```
+
 * 响应格式:
 
 ```json
@@ -605,7 +977,8 @@ string
               "tokens": number,
               "max_requests": number,
               "max_tokens": number
-            }
+            },
+            "start_of_month": "string"
           },
           "user": {
             "email": "string",
@@ -620,10 +993,29 @@ string
           }
         }
       },
-      "prompt": "string",
+      "chain": {
+        "prompt": [ // array or string
+          {
+            "role": "string",
+            "content": "string"
+          }
+        ],
+        "delays": [
+          "string",
+          [
+            [
+              number, // chars count
+              number // time
+            ]
+          ]
+        ],
+        "usage": { // optional
+          "input": number,
+          "output": number,
+        }
+      },
       "timing": {
-        "total": number,
-        "first": number
+        "total": number
       },
       "stream": boolean,
       "status": "string",
@@ -634,6 +1026,13 @@ string
   "status": "success"
 }
 ```
+
+* 说明：
+  - 所有查询参数都是可选的
+  - 管理员可以查看所有日志，普通用户只能查看与其token相关的日志
+  - 如果提供了无效的状态或会员类型，将返回空结果
+  - 日期时间格式需遵循 RFC3339 标准，如："2024-03-20T15:30:00+08:00"
+  - 邮箱和模型名称支持部分匹配
 
 #### 获取用户信息
 
@@ -673,7 +1072,8 @@ string
       "tokens": number,
       "max_requests": number,
       "max_tokens": number
-    }
+    },
+    "start_of_month": "string"
   },
   "user": {
     "email": "string",
@@ -694,6 +1094,29 @@ string
 ```json
 {
   "error": "string"
+}
+```
+
+#### 获取更新令牌
+
+* 接口地址: `/token-upgrade`
+* 请求方法: POST
+* 认证方式: 请求体中包含token
+* 请求格式:
+
+```json
+{
+  "token": "string"
+}
+```
+
+* 响应格式:
+
+```json
+{
+  "status": "success" | "failure" | "error",
+  "message": "string",
+  "result": "string" // optional
 }
 ```
 
@@ -770,4 +1193,10 @@ string
 
 有人说少个二维码来着，还是算了。如果觉得好用，给点支持。其实没啥大不了的，没兴趣就不做了。不想那么多了。
 
-要不给我邮箱发口令红包？休息休息
+要不给我邮箱发口令红包？
+
+过了差不多两个多月，继续吐槽：
+
+我都不知道为什么现在还在更新，明明我自己都不用的，一看到bug反馈我就尽量马上去解决问题。不知道说什么好了。
+
+真得给我磕一个。

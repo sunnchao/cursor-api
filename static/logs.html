@@ -80,9 +80,37 @@
       width: 90%;
       max-width: 800px;
       max-height: 85vh;
-      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
       border: 1px solid var(--border-color);
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+
+    .modal-header {
+      position: sticky;
+      top: 0;
+      background: var(--card-background);
+      z-index: 10;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .modal-header h3 {
+      margin: 0;
+      flex-grow: 1;
+    }
+
+    #conversation-content-container {
+      flex: 1;
+      overflow-y: auto;
+      margin: 0 -20px;
+      padding: 20px;
     }
 
     .close {
@@ -132,17 +160,6 @@
     .message-table td:first-child {
       width: 80px;
       white-space: nowrap;
-    }
-
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 15px;
-    }
-
-    .modal-header h3 {
-      margin: 0;
     }
 
     .close {
@@ -260,6 +277,13 @@
       word-break: break-word;
     }
 
+    .token-info-container {
+      flex: 1;
+      overflow-y: auto;
+      margin: 0 -20px;
+      padding: 20px;
+    }
+
     /* 对话预览特定样式 */
     .prompt-preview .tooltip-content {
       width: 320px;
@@ -328,28 +352,6 @@
       transition: background-color var(--transition-fast);
     }
 
-    /* 响应式优化 */
-    @media (max-width: 768px) {
-      .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
-      }
-
-      .stat-card {
-        padding: 16px;
-      }
-
-      .stat-value {
-        font-size: 24px;
-      }
-
-      .modal-content {
-        margin: 2% auto;
-        width: 95%;
-        padding: 16px;
-      }
-    }
-
     /* 优化表格悬停效果 */
     #logsTable tr:hover td {
       background-color: var(--hover-color, rgba(0, 0, 0, 0.02));
@@ -376,6 +378,155 @@
       background: var(--error-color);
       color: white;
     }
+
+    /* 图表样式 */
+    .chart-container {
+      background: var(--card-background);
+      padding: 20px;
+      border-radius: var(--border-radius);
+      margin-bottom: var(--spacing);
+      border: 1px solid var(--border-color);
+      height: 300px;
+    }
+
+    /* 添加菜单切换样式 */
+    .tab-menu {
+      display: flex;
+      margin-bottom: 15px;
+    }
+
+    .tab-button {
+      padding: 8px 16px;
+      background: var(--card-background);
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      font-size: 14px;
+    }
+
+    .tab-button:first-child {
+      border-radius: var(--border-radius) 0 0 var(--border-radius);
+    }
+
+    .tab-button:last-child {
+      border-radius: 0 var(--border-radius) var(--border-radius) 0;
+    }
+
+    .tab-button.active {
+      background: var(--primary-color);
+      color: white;
+      border-color: var(--primary-color);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .delay-chart-container {
+      height: 200px;
+      margin-bottom: 20px;
+    }
+
+    .delay-table-container {
+      max-height: none;
+      overflow-y: visible;
+    }
+
+    /* 响应式样式 - 所有@media查询集中在此 */
+    @media (max-width: 768px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+
+      .stat-card {
+        padding: 16px;
+      }
+
+      .stat-value {
+        font-size: 24px;
+      }
+
+      .modal-content {
+        margin: 2% auto;
+        width: 95%;
+        padding: 16px;
+      }
+
+      .chart-container {
+        height: 200px;
+        padding: 16px;
+      }
+
+      .modal-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .tab-menu {
+        width: 100%;
+      }
+
+      .tab-button {
+        flex: 1;
+      }
+    }
+
+    .pagination-container {
+      margin-top: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .pagination-info {
+      flex: 1;
+    }
+
+    .pagination-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .page-jumper {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-left: 15px;
+    }
+
+    .page-input {
+      width: 60px;
+      padding: 5px;
+      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+      text-align: center;
+    }
+
+    .page-input:focus {
+      border-color: var(--primary-color);
+      outline: none;
+    }
+
+    .page-go-btn {
+      padding: 5px 10px;
+      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+      background: var(--card-background);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .page-go-btn:hover {
+      background: var(--primary-color);
+      color: white;
+      border-color: var(--primary-color);
+    }
   </style>
 </head>
 
@@ -387,6 +538,71 @@
       <label>认证令牌:</label>
       <input type="password" id="authToken" placeholder="输入 AUTH_TOKEN">
     </div>
+
+    <!-- 添加查询参数区域 -->
+    <div class="form-group" style="margin-top: 15px;">
+      <details>
+        <summary>高级筛选</summary>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+          <div>
+            <label for="statusFilter">状态:</label>
+            <select id="statusFilter" class="form-control">
+              <option value="">全部</option>
+              <option value="success">成功</option>
+              <option value="failure">失败</option>
+              <option value="pending">处理中</option>
+            </select>
+          </div>
+          <div>
+            <label for="modelFilter">模型:</label>
+            <input type="text" id="modelFilter" class="form-control" placeholder="模型名称">
+          </div>
+          <div>
+            <label for="emailFilter">用户邮箱:</label>
+            <input type="text" id="emailFilter" class="form-control" placeholder="用户邮箱">
+          </div>
+          <div>
+            <label for="membershipFilter">会员类型:</label>
+            <select id="membershipFilter" class="form-control">
+              <option value="">全部</option>
+              <option value="free">免费</option>
+              <option value="free_trial">试用</option>
+              <option value="pro">专业版</option>
+              <option value="enterprise">企业版</option>
+            </select>
+          </div>
+          <div>
+            <label for="streamFilter">流式响应:</label>
+            <select id="streamFilter" class="form-control">
+              <option value="">全部</option>
+              <option value="true">是</option>
+              <option value="false">否</option>
+            </select>
+          </div>
+          <div>
+            <label for="errorFilter">包含错误:</label>
+            <select id="errorFilter" class="form-control">
+              <option value="">全部</option>
+              <option value="true">是</option>
+              <option value="false">否</option>
+            </select>
+          </div>
+          <div>
+            <label for="pageSize">每页显示:</label>
+            <select id="pageSize" class="form-control">
+              <option value="10">10 条</option>
+              <option value="20" selected>20 条</option>
+              <option value="50">50 条</option>
+              <option value="100">100 条</option>
+            </select>
+          </div>
+          <div style="display: flex; align-items: flex-end;">
+            <button onclick="applyFilters()" style="margin-top: 8px;">应用筛选</button>
+          </div>
+        </div>
+      </details>
+    </div>
+
     <div class="refresh-container">
       <div class="button-group">
         <button onclick="fetchLogs()">刷新日志</button>
@@ -418,6 +634,11 @@
       </div>
     </div>
 
+    <!-- 添加图表容器 -->
+    <div class="chart-container">
+      <canvas id="requestsChart"></canvas>
+    </div>
+
     <div class="table-container">
       <table id="logsTable">
         <thead>
@@ -426,8 +647,9 @@
             <th>时间</th>
             <th>模型</th>
             <th>Token信息</th>
-            <th>Prompt</th>
-            <th>用时/首字</th>
+            <th>对话</th>
+            <th>用时</th>
+            <th>输入/输出</th>
             <th>流式响应</th>
             <th>状态</th>
             <th>错误信息</th>
@@ -435,6 +657,25 @@
         </thead>
         <tbody id="logsBody"></tbody>
       </table>
+    </div>
+
+    <!-- 添加分页控件 -->
+    <div class="pagination-container"
+      style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+      <div class="pagination-info">
+        共 <span id="totalRecords">0</span> 条记录，
+        每页 <input type="number" id="customPageSize" class="page-input" min="5" max="100" value="20"> 条
+        <button class="page-go-btn" onclick="changePageSize()">应用</button>
+      </div>
+      <div class="pagination-controls">
+        <button id="prevPage" onclick="changePage(-1)" disabled>&laquo; 上一页</button>
+        <span id="currentPage">第 1 页</span>
+        <button id="nextPage" onclick="changePage(1)" disabled>下一页 &raquo;</button>
+        <div class="page-jumper">
+          跳转到第 <input type="number" id="pageNumberInput" class="page-input" min="1" value="1"> 页
+          <button class="page-go-btn" onclick="jumpToPage()">GO</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -450,87 +691,124 @@
           <span class="close">&times;</span>
         </div>
       </div>
-      <table class="message-table">
-        <tr>
-          <td>Token:</td>
-          <td id="modalToken"></td>
-        </tr>
-        <tr>
-          <td>校验和:</td>
-          <td id="modalChecksum"></td>
-        </tr>
-        <tr>
-          <td colspan="2" style="text-align: center; font-weight: bold; background-color: var(--border-color);">
-            用户信息
-          </td>
-        </tr>
-        <tr>
-          <td>邮箱:</td>
-          <td id="modalEmail"></td>
-        </tr>
-        <tr>
-          <td>用户名:</td>
-          <td id="modalName"></td>
-        </tr>
-        <tr>
-          <td>用户ID:</td>
-          <td id="modalId"></td>
-        </tr>
-        <tr>
-          <td>更新时间:</td>
-          <td id="modalUpdatedAt"></td>
-        </tr>
-        <tr>
-          <td colspan="2" style="text-align: center; font-weight: bold; background-color: var(--border-color);">
-            会员信息
-          </td>
-        </tr>
-        <tr>
-          <td>会员类型:</td>
-          <td id="modalMemberType"></td>
-        </tr>
-        <tr>
-          <td>支付ID:</td>
-          <td id="modalPaymentId"></td>
-        </tr>
-        <tr>
-          <td>试用剩余:</td>
-          <td id="modalTrialDays"></td>
-        </tr>
-        <tr>
-          <td colspan="2" style="text-align: center; font-weight: bold; background-color: var(--border-color);">
-            使用量统计 (最近30天)
-          </td>
-        </tr>
-        <tr>
-          <td>Premium models:</td>
-          <td id="modalPremiumUsage"></td>
-        </tr>
-        <tr>
-          <td>Standard models:</td>
-          <td id="modalStandardUsage"></td>
-        </tr>
-        <tr>
-          <td>Unknown models:</td>
-          <td id="modalUnknownUsage"></td>
-        </tr>
-      </table>
+      <div class="token-info-container">
+        <table class="message-table">
+          <tr>
+            <td>Token:</td>
+            <td id="modalToken"></td>
+          </tr>
+          <tr>
+            <td>校验和:</td>
+            <td id="modalChecksum"></td>
+          </tr>
+          <tr>
+            <td colspan="2" style="text-align: center; font-weight: bold; background-color: var(--border-color);">
+              用户信息
+            </td>
+          </tr>
+          <tr>
+            <td>邮箱:</td>
+            <td id="modalEmail"></td>
+          </tr>
+          <tr>
+            <td>用户名:</td>
+            <td id="modalName"></td>
+          </tr>
+          <tr>
+            <td>用户ID:</td>
+            <td id="modalId"></td>
+          </tr>
+          <tr>
+            <td>更新时间:</td>
+            <td id="modalUpdatedAt"></td>
+          </tr>
+          <tr>
+            <td colspan="2" style="text-align: center; font-weight: bold; background-color: var(--border-color);">
+              会员信息
+            </td>
+          </tr>
+          <tr>
+            <td>会员类型:</td>
+            <td id="modalMemberType"></td>
+          </tr>
+          <tr>
+            <td>支付ID:</td>
+            <td id="modalPaymentId"></td>
+          </tr>
+          <tr>
+            <td>试用剩余:</td>
+            <td id="modalTrialDays"></td>
+          </tr>
+          <tr>
+            <td colspan="2" style="text-align: center; font-weight: bold; background-color: var(--border-color);">
+              使用量统计 (最近30天)
+            </td>
+          </tr>
+          <tr>
+            <td>Premium models:</td>
+            <td id="modalPremiumUsage"></td>
+          </tr>
+          <tr>
+            <td>Standard models:</td>
+            <td id="modalStandardUsage"></td>
+          </tr>
+          <tr>
+            <td>Unknown models:</td>
+            <td id="modalUnknownUsage"></td>
+          </tr>
+        </table>
+      </div>
       <div id="usageProgressContainer"></div>
     </div>
   </div>
 
-  <div id="promptModal" class="modal">
+  <div id="conversationModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>对话内容</h3>
+        <h3>对话详情</h3>
+        <div class="tab-menu">
+          <button id="tab-prompt" class="tab-button active">对话内容</button>
+          <button id="tab-delays" class="tab-button">延迟分析</button>
+        </div>
         <span class="close">&times;</span>
       </div>
-      <div id="promptContent"></div>
+      <div id="conversation-content-container">
+        <div id="dialogContent" class="tab-content active"></div>
+        <div id="delaysContent" class="tab-content">
+          <div class="chart-container delay-chart-container">
+            <canvas id="delayChart"></canvas>
+          </div>
+          <h4>事件表</h4>
+          <div class="delay-table-container">
+            <table class="message-table" id="delaysTable">
+              <thead>
+                <tr>
+                  <th style="width: 8%">序号</th>
+                  <th style="width: 52%">文本</th>
+                  <th style="width: 15%">间隔 (秒)</th>
+                  <th style="width: 25%">速率 (字符/秒)</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
+  <!-- 添加 Chart.js 库 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"
+    integrity="sha512-IMvjDnJzMKoQZLPYQHxR4g8nm0sSd9bR7Kl5ayxnPHV8ChqVpHCdBYXGib3ZftuDlfaceqn7t47fObseBCEEJw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
   <script>
     let refreshInterval;
+    let requestsChart;
+    let currentPageIndex = 0;
+    let pageSize = 20;
+    let totalRecords = 0;
+    let currentFilters = {};
 
     function updateStats(data) {
       document.getElementById('totalRequests').textContent = data.total || 0;
@@ -569,7 +847,7 @@
           return;
         }
 
-        const data = await makeAuthenticatedRequest('/tokens/delete', {
+        const data = await makeAuthenticatedRequest('/tokens/del', {
           method: 'POST',
           body: JSON.stringify({
             tokens: [currentToken],
@@ -584,8 +862,6 @@
             message = 'Token删除失败：未找到该Token';
           }
           showGlobalMessage(message);
-          // 刷新日志列表
-          fetchLogs();
         }
       };
 
@@ -676,20 +952,139 @@
       return rows.map(([label, value]) => `<div class="tooltip-info-row"><span class="label">${label}:</span><span class="value">${value}</span></div>`).join('');
     }
 
+    function initChart() {
+      const ctx = document.getElementById('requestsChart').getContext('2d');
+      requestsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: '每小时请求数',
+            data: [],
+            borderColor: 'rgb(75, 192, 192)',
+            tension: 0.1,
+            fill: false
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                stepSize: 10
+              }
+            }
+          },
+          plugins: {
+            title: {
+              display: true,
+              text: '24小时请求统计'
+            }
+          }
+        }
+      });
+    }
+
+    // 更新图表数据
+    function updateChart(data) {
+      if (!requestsChart) {
+        initChart();
+      }
+
+      // 按小时统计请求数量
+      const hourlyStats = new Map();
+      const now = new Date();
+      const past24Hours = new Date(now - 24 * 60 * 60 * 1000);
+
+      // 初始化24小时的时间段
+      for (let i = 0; i < 24; i++) {
+        const hour = new Date(now - i * 60 * 60 * 1000);
+        const hourKey = hour.toLocaleString('zh-CN', {
+          month: 'numeric',
+          day: 'numeric',
+          hour: 'numeric'
+        });
+        hourlyStats.set(hourKey, 0);
+      }
+
+      // 统计每小时的请求数
+      data.logs.forEach(log => {
+        const logTime = new Date(log.timestamp);
+        if (logTime >= past24Hours) {
+          const hourKey = logTime.toLocaleString('zh-CN', {
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric'
+          });
+          if (hourlyStats.has(hourKey)) {
+            hourlyStats.set(hourKey, hourlyStats.get(hourKey) + 1);
+          }
+        }
+      });
+
+      // 转换为图表数据
+      const sortedHours = Array.from(hourlyStats.keys()).reverse();
+      const counts = sortedHours.map(hour => hourlyStats.get(hour));
+
+      requestsChart.data.labels = sortedHours;
+      requestsChart.data.datasets[0].data = counts;
+      requestsChart.update();
+    }
+
     function updateTable(data) {
       const tbody = document.getElementById('logsBody');
       updateStats(data);
+      updateChart(data);
 
-      tbody.innerHTML = data.logs.map(log => `<tr><td>${log.id}</td><td>${new Date(log.timestamp).toLocaleString()}</td><td>${log.model}</td><td><div class="token-info-tooltip"><button class="info-button" onclick='showTokenModal(${JSON.stringify(log.token_info)})'>查看详情<div class="tooltip-content">${formatSimpleTokenInfo(log.token_info)}</div></button></div></td><td>${log.prompt ? `<div class="token-info-tooltip prompt-preview"><button class="info-button" onclick="showPromptModal(decodeURIComponent('${encodeURIComponent(log.prompt).replace(/'/g, "\\'")}'))">查看对话<div class="tooltip-content">${formatPromptPreview(log.prompt)}</div></button></div>` : '-'}</td><td>${formatTiming(log.timing.total, log.timing.first)}</td><td>${log.stream ? '是' : '否'}</td><td>${log.status}</td><td>${log.error || '-'}</td></tr>`).join('');
+      // 更新总记录数和分页信息
+      totalRecords = data.total;
+      document.getElementById('totalRecords').textContent = totalRecords;
+      updatePaginationControls();
+
+      tbody.innerHTML = data.logs.map(log => {
+        let delaysDataAttribute = '';
+        if (log.chain && Array.isArray(log.chain.delays) && log.chain.delays.length === 2 && typeof log.chain.delays[0] === 'string' && Array.isArray(log.chain.delays[1])) {
+          try {
+            const originalDelaysJson = JSON.stringify(log.chain.delays);
+            const escapedJsonString = escapeHtml(originalDelaysJson);
+            delaysDataAttribute = `data-delays='${escapedJsonString}'`;
+          } catch (e) {
+            console.error('Failed to stringify delays data:', e, log.chain.delays);
+            delaysDataAttribute = '';
+          }
+        }
+
+        return `<tr>
+          <td>${log.id}</td>
+          <td>${new Date(log.timestamp).toLocaleString()}</td>
+          <td>${log.model}</td>
+          <td><div class="token-info-tooltip"><button class="info-button" onclick='showTokenModal(${JSON.stringify(log.token_info)})'>查看详情<div class="tooltip-content">${formatSimpleTokenInfo(log.token_info)}</div></button></div></td>
+          <td>${log.chain ? `<div class="token-info-tooltip prompt-preview"><button class="info-button view-conversation" data-prompt="${encodeURIComponent(JSON.stringify(log.chain.prompt))}" ${delaysDataAttribute}>查看对话<div class="tooltip-content">${formatDialogPreview(JSON.stringify(log.chain.prompt))}</div></button></div>` : '-'}</td>
+          <td>${formatTiming(log.timing.total)}</td>
+          <td>${formatUsage(log.chain?.usage)}</td>
+          <td>${log.stream ? '是' : '否'}</td>
+          <td>${log.status}</td>
+          <td>${typeof log.error === 'string' ? log.error : log.error?.error ?? '-'}</td>
+        </tr>`;
+      }).join('');
+
+      // 添加事件监听器
+      tbody.querySelectorAll('.view-conversation').forEach(button => {
+        button.addEventListener('click', function () {
+          const prompt = decodeURIComponent(this.dataset.prompt);
+          const delays = this.dataset.delays ? JSON.parse(this.dataset.delays) : [];
+          showConversationModal(prompt, delays);
+        });
+      });
     }
 
-    function formatTiming(total, first) {
-      const formattedTotal = total.toFixed(2);
-      const formattedFirst = first !== null && first !== undefined ? `${first.toFixed(2)}s` : '-';
-      return `${formattedTotal}s / ${formattedFirst}`;
+    function formatTiming(total) {
+      return `${total.toFixed(2)}s`;
     }
 
-    function formatPromptPreview(promptStr) {
+    function formatDialogPreview(promptStr) {
       try {
         const messages = parsePrompt(promptStr);
         if (!messages || messages.length === 0) {
@@ -711,8 +1106,129 @@
       }
     }
 
+    // 更新分页控件状态
+    function updatePaginationControls() {
+      const prevPageBtn = document.getElementById('prevPage');
+      const nextPageBtn = document.getElementById('nextPage');
+      const currentPageSpan = document.getElementById('currentPage');
+      const pageNumberInput = document.getElementById('pageNumberInput');
+      const customPageSize = document.getElementById('customPageSize');
+
+      // 计算总页数
+      const totalPages = Math.ceil(totalRecords / pageSize) || 1;
+
+      // 禁用或启用上一页按钮
+      prevPageBtn.disabled = currentPageIndex <= 0;
+
+      // 禁用或启用下一页按钮（如果当前页是最后一页或没有足够的记录）
+      const hasMorePages = (currentPageIndex + 1) * pageSize < totalRecords;
+      nextPageBtn.disabled = !hasMorePages;
+
+      // 更新当前页显示
+      currentPageSpan.textContent = `第 ${currentPageIndex + 1} 页 / 共 ${totalPages} 页`;
+
+      // 同步输入框数值
+      pageNumberInput.value = currentPageIndex + 1;
+      pageNumberInput.max = totalPages;
+      customPageSize.value = pageSize;
+    }
+
+    // 切换页码
+    function changePage(delta) {
+      currentPageIndex += delta;
+      if (currentPageIndex < 0) currentPageIndex = 0;
+
+      fetchLogs();
+    }
+
+    // 跳转到指定页
+    function jumpToPage() {
+      const pageNumberInput = document.getElementById('pageNumberInput');
+      const pageNumber = parseInt(pageNumberInput.value);
+      const totalPages = Math.ceil(totalRecords / pageSize) || 1;
+
+      if (isNaN(pageNumber) || pageNumber < 1) {
+        showGlobalMessage('请输入有效的页码', true);
+        pageNumberInput.value = currentPageIndex + 1;
+        return;
+      }
+
+      if (pageNumber > totalPages) {
+        showGlobalMessage(`页码超出范围，最大页码为 ${totalPages}`, true);
+        pageNumberInput.value = totalPages;
+        return;
+      }
+
+      currentPageIndex = pageNumber - 1;
+      fetchLogs();
+    }
+
+    // 更改每页显示数量
+    function changePageSize() {
+      const customPageSize = document.getElementById('customPageSize');
+      const newPageSize = parseInt(customPageSize.value);
+
+      if (isNaN(newPageSize) || newPageSize < 5 || newPageSize > 100) {
+        showGlobalMessage('每页显示数量必须在5-100之间', true);
+        customPageSize.value = pageSize;
+        return;
+      }
+
+      // 重置到第一页并使用新的pageSize
+      currentPageIndex = 0;
+      pageSize = newPageSize;
+      fetchLogs();
+    }
+
+    // 应用筛选条件
+    function applyFilters() {
+      // 重置到第一页
+      currentPageIndex = 0;
+
+      // 获取所有筛选值
+      const status = document.getElementById('statusFilter').value;
+      const model = document.getElementById('modelFilter').value;
+      const email = document.getElementById('emailFilter').value;
+      const membership = document.getElementById('membershipFilter').value;
+      const stream = document.getElementById('streamFilter').value;
+      const hasError = document.getElementById('errorFilter').value;
+
+      // 更新每页显示数量（如果在高级筛选中设置了）
+      const pageSizeSelect = document.getElementById('pageSize');
+      if (pageSizeSelect) {
+        pageSize = parseInt(pageSizeSelect.value);
+        // 同步自定义输入框
+        document.getElementById('customPageSize').value = pageSize;
+      }
+
+      // 更新当前筛选条件
+      currentFilters = {};
+
+      if (status) currentFilters.status = status;
+      if (model) currentFilters.model = model;
+      if (email) currentFilters.email = email;
+      if (membership) currentFilters.membership_type = membership;
+      if (stream) currentFilters.stream = stream === 'true';
+      if (hasError) currentFilters.has_error = hasError === 'true';
+
+      // 获取筛选后的数据
+      fetchLogs();
+    }
+
     async function fetchLogs() {
-      const data = await makeAuthenticatedRequest('/logs');
+      // 构建查询参数
+      const query = {
+        limit: pageSize,
+        offset: currentPageIndex * pageSize,
+        ...currentFilters
+      };
+
+      // 发送请求
+      const data = await makeAuthenticatedRequest('/logs', {
+        method: 'POST',
+        body: JSON.stringify({ query })
+      });
+
       if (data) {
         updateTable(data);
         showGlobalMessage('日志获取成功');
@@ -733,10 +1249,29 @@
       const authToken = getAuthToken();
       if (authToken) {
         document.getElementById('authToken').value = authToken;
+
+        // 设置默认页大小
+        pageSize = parseInt(document.getElementById('pageSize').value || "20");
+        document.getElementById('customPageSize').value = pageSize;
+
         fetchLogs();
       }
       // 启动自动刷新
       refreshInterval = setInterval(fetchLogs, 60000);
+
+      // 添加页码输入框回车键支持
+      document.getElementById('pageNumberInput').addEventListener('keyup', function (event) {
+        if (event.key === 'Enter') {
+          jumpToPage();
+        }
+      });
+
+      // 添加页面大小输入框回车键支持
+      document.getElementById('customPageSize').addEventListener('keyup', function (event) {
+        if (event.key === 'Enter') {
+          changePageSize();
+        }
+      });
     });
 
     // 初始化 token 处理
@@ -760,6 +1295,397 @@
       if (event.target.classList.contains('modal')) {
         event.target.style.display = 'none';
       }
+    }
+
+    /**
+     * 解析对话内容
+     * @param {string} promptStr - 原始prompt字符串
+     * @returns {Array<{role: string, content: string}>} 解析后的对话数组
+     */
+    function parsePrompt(promptStr) {
+      if (!promptStr) return [];
+
+      // 尝试解析JSON格式的prompt
+      try {
+        const parsed = JSON.parse(promptStr);
+
+        // 如果是已解析的格式
+        if (Array.isArray(parsed)) {
+          return parsed.map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }));
+        }
+      } catch (e) {
+        // 如果解析JSON失败，说明是原始字符串格式，使用原来的解析逻辑
+      }
+
+      const messages = [];
+      const lines = promptStr.split('\n');
+      let currentRole = '';
+      let currentContent = '';
+
+      const roleMap = {
+        'BEGIN_SYSTEM': 'system',
+        'BEGIN_USER': 'user',
+        'BEGIN_ASSISTANT': 'assistant'
+      };
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        // 检查是否是角色标记行
+        let foundRole = false;
+        for (const [marker, role] of Object.entries(roleMap)) {
+          if (line.includes(marker)) {
+            // 保存之前的消息（如果有）
+            if (currentRole && currentContent.trim()) {
+              messages.push({
+                role: currentRole,
+                content: currentContent.trim()
+              });
+            }
+            // 设置新角色
+            currentRole = role;
+            currentContent = '';
+            foundRole = true;
+            break;
+          }
+        }
+
+        // 如果不是角色标记行且不是END标记行，则添加到当前内容
+        if (!foundRole && !line.includes('END_')) {
+          currentContent += line + '\n';
+        }
+      }
+
+      // 添加最后一条消息
+      if (currentRole && currentContent.trim()) {
+        messages.push({
+          role: currentRole,
+          content: currentContent.trim()
+        });
+      }
+
+      return messages;
+    }
+
+    function escapeHtml(content) {
+      // 先转义HTML特殊字符
+      const escaped = content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+      return escaped;
+    }
+
+    function escapeHtmlAndControlChars(content) {
+      // 先转义HTML特殊字符
+      let escaped = content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+      // 然后转义控制字符
+      escaped = escaped
+        .replace(/\\/g, '\\\\')
+        .replace(/\n/g, '\\n')
+        .replace(/\t/g, '\\t')
+        .replace(/\r/g, '\\r');
+
+      return escaped;
+    }
+
+    /**
+     * 格式化对话内容为HTML表格
+     * @param {Array<{role: string, content: string}>} messages - 对话消息数组
+     * @returns {string} HTML表格字符串
+     */
+    function formatPromptToTable(messages) {
+      if (!messages || messages.length === 0) {
+        return '<p>无对话内容</p>';
+      }
+
+      const roleLabels = {
+        'system': '系统',
+        'user': '用户',
+        'assistant': '助手'
+      };
+
+      return `<table class="message-table"><thead><tr><th>角色</th><th>内容</th></tr></thead><tbody>${messages.map(msg =>
+        `<tr><td>${roleLabels[msg.role] || msg.role}</td><td>${escapeHtml(msg.content).replace(/\n/g, '<br>')}</td></tr>`
+      ).join('')}</tbody></table>`;
+    }
+
+    /**
+     * 显示对话详情弹窗
+     * @param {string} promptStr - 对话提示字符串
+     * @param {Array} delaysTuple - 延迟数据数组
+     */
+    function showConversationModal(promptStr, delaysTuple) {
+      try {
+        const modal = document.getElementById('conversationModal');
+        const dialogContent = document.getElementById('dialogContent');
+        const delaysContent = document.getElementById('delaysContent');
+        const tabPrompt = document.getElementById('tab-prompt');
+        const tabDelays = document.getElementById('tab-delays');
+        const delaysTableBody = document.querySelector('#delaysTable tbody');
+        const delayChartContainer = document.querySelector('.delay-chart-container');
+
+        if (!modal || !dialogContent || !delaysContent || !tabPrompt || !tabDelays || !delaysTableBody || !delayChartContainer) {
+          console.error('Modal elements not found');
+          return;
+        }
+
+        // 处理 Prompt
+        try {
+          const messages = parsePrompt(promptStr);
+          dialogContent.innerHTML = formatPromptToTable(messages);
+        } catch (e) {
+          console.error('解析 Prompt 数据失败:', e);
+          dialogContent.innerHTML = '<p>无法加载对话内容。</p>';
+        }
+
+        // 处理 Delays
+        delaysTableBody.innerHTML = '';
+        delayChartContainer.innerHTML = '<canvas id="delayChart"></canvas>';
+
+        let fullText = '';
+        let delayPoints = [];
+        let chartDataPoints = [{ time: 0, chars: 0, text: '' }];
+
+        if (delaysTuple) {
+          if (Array.isArray(delaysTuple) && delaysTuple.length === 2 && typeof delaysTuple[0] === 'string' && Array.isArray(delaysTuple[1])) {
+            fullText = delaysTuple[0];
+            delayPoints = delaysTuple[1];
+          } else {
+            console.warn('Delays data format is incorrect:', delaysTuple);
+          }
+        }
+
+        if (delayPoints.length > 0) {
+          let currentIndex = 0;
+          let totalChars = 0;
+          let totalTime = 0;
+
+          delayPoints.forEach(([length, deltaTime], index) => {
+            if (typeof length !== 'number' || typeof deltaTime !== 'number' || length < 0 || deltaTime < 0) {
+              console.warn(`Skipping invalid delay point at index ${index}:`, [length, deltaTime]);
+              return;
+            }
+
+            const chunkText = fullText.substring(currentIndex, currentIndex + length);
+            currentIndex += length;
+            totalChars += length;
+            totalTime += deltaTime;
+
+            const rate = deltaTime > 0 ? (length / deltaTime) : Infinity;
+            const avgRate = totalTime > 0 ? (totalChars / totalTime) : Infinity;
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td>${index + 1}</td>
+              <td>${escapeHtmlAndControlChars(chunkText)}</td>
+              <td>${deltaTime.toFixed(3)}</td>
+              <td>${isFinite(rate) ? rate.toFixed(1) : 'N/A'} (平均: ${isFinite(avgRate) ? avgRate.toFixed(1) : 'N/A'})</td>
+            `;
+            delaysTableBody.appendChild(row);
+
+            chartDataPoints.push({
+              time: totalTime,
+              chars: totalChars,
+              text: chunkText
+            });
+          });
+
+          initDelayChart(chartDataPoints);
+          tabDelays.style.display = '';
+
+        } else {
+          delaysTableBody.innerHTML = '<tr><td colspan="4">无延迟数据</td></tr>';
+          delayChartContainer.innerHTML = '<div style="text-align: center; padding: 20px;">无延迟数据可供分析</div>';
+          tabDelays.style.display = 'none';
+        }
+
+        // 设置标签页
+        tabPrompt.onclick = () => setActiveTab('prompt');
+        tabDelays.onclick = () => setActiveTab('delays');
+
+        setActiveTab('prompt');
+        modal.style.display = 'block';
+
+      } catch (e) {
+        console.error('显示对话详情失败:', e);
+      }
+    }
+
+    /**
+     * 设置当前活动标签页
+     * @param {string} tabName - 标签页名称 ('prompt' 或 'delays')
+     */
+    function setActiveTab(tabName) {
+      const dialogContent = document.getElementById('dialogContent');
+      const delaysContent = document.getElementById('delaysContent');
+      const tabPrompt = document.getElementById('tab-prompt');
+      const tabDelays = document.getElementById('tab-delays');
+
+      if (!dialogContent || !delaysContent || !tabPrompt || !tabDelays) {
+        console.error('Tab elements not found');
+        return;
+      }
+
+      if (tabName === 'prompt') {
+        dialogContent.classList.add('active');
+        delaysContent.classList.remove('active');
+        tabPrompt.classList.add('active');
+        tabDelays.classList.remove('active');
+      } else {
+        dialogContent.classList.remove('active');
+        delaysContent.classList.add('active');
+        tabPrompt.classList.remove('active');
+        tabDelays.classList.add('active');
+      }
+    }
+
+    /**
+     * 初始化延迟图表
+     * @param {Array<{time: number, chars: number, text: string}>} chartDataPoints - 包含累计时间和字符数以及块文本的数据点数组
+     */
+    function initDelayChart(chartDataPoints) {
+      if (!chartDataPoints || chartDataPoints.length <= 1) {
+        const container = document.querySelector('.delay-chart-container');
+        if (container) {
+          container.innerHTML = '<div style="text-align: center; padding: 20px;">延迟数据不足，无法绘制图表</div>';
+        }
+        return;
+      }
+
+      const ctx = document.getElementById('delayChart');
+      if (!ctx) {
+        console.error('找不到图表canvas元素');
+        return;
+      }
+
+      const existingChart = Chart.getChart(ctx);
+      if (existingChart) {
+        existingChart.destroy();
+      }
+
+      const maxPoints = 100;
+      let sampledPoints = chartDataPoints;
+
+      if (chartDataPoints.length > maxPoints) {
+        sampledPoints = [];
+        const interval = (chartDataPoints.length - 2) / (maxPoints - 2);
+
+        sampledPoints.push(chartDataPoints[0]);
+
+        for (let i = 1; i < maxPoints - 1; i++) {
+          const rawIndex = Math.round(i * interval);
+          const actualIndex = Math.min(rawIndex + 1, chartDataPoints.length - 2);
+          sampledPoints.push(chartDataPoints[actualIndex]);
+        }
+
+        sampledPoints.push(chartDataPoints[chartDataPoints.length - 1]);
+      }
+
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [{
+            label: '累计输出字符数',
+            data: sampledPoints.map(point => ({
+              x: point.time,
+              y: point.chars
+            })),
+            borderColor: 'rgb(75,192,192)',
+            backgroundColor: 'rgba(75,192,192,0.2)',
+            tension: 0.1,
+            fill: true,
+            pointRadius: 3,
+            pointHoverRadius: 5
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: '字符输出进度'
+            },
+            tooltip: {
+              callbacks: {
+                title: function (context) {
+                  const pointIndex = context[0].dataIndex;
+                  if (pointIndex < sampledPoints.length) {
+                    return `用时: ${sampledPoints[pointIndex].time.toFixed(1)}秒`;
+                  }
+                  return '';
+                },
+                label: function (context) {
+                  const pointIndex = context.dataIndex;
+                  if (pointIndex < sampledPoints.length) {
+                    const point = sampledPoints[pointIndex];
+                    const prevPoint = pointIndex > 0 ? sampledPoints[pointIndex - 1] : { time: 0, chars: 0, text: '' };
+
+                    const deltaTime = point.time - prevPoint.time;
+                    const deltaChars = point.chars - prevPoint.chars;
+                    const currentRate = deltaTime > 0 ? (deltaChars / deltaTime).toFixed(1) : 'N/A';
+                    const avgRate = point.time > 0 ? (point.chars / point.time).toFixed(1) : 'N/A';
+
+                    const chunkText = point.text || '';
+
+                    return [
+                      `累计字符: ${point.chars}`,
+                      `平均速率: ${avgRate} 字符/秒`,
+                      `当前块速率: ${currentRate} 字符/秒`,
+                      `当前块文本: ${escapeHtmlAndControlChars(chunkText.length > 50 ? chunkText.substring(0, 50) + '...' : chunkText)}`
+                    ];
+                  }
+                  return '';
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: '累计字符数'
+              }
+            },
+            x: {
+              type: 'linear',
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: '累计用时（秒）'
+              },
+              ticks: {
+                callback: function (value) {
+                  return value.toFixed(1) + 's';
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    /**
+     * 格式化使用量信息
+     * @param {Object} usage - 使用量对象 { input: number, output: number }
+     * @returns {string} 格式化后的字符串
+     */
+    function formatUsage(usage) {
+      if (!usage) return '-';
+      return `${usage.input} / ${usage.output}`;
     }
   </script>
 </body>

@@ -7,10 +7,9 @@ pub struct HealthCheckResponse {
     pub status: ApiStatus,
     pub version: &'static str,
     pub uptime: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stats: Option<SystemStats>,
+    pub stats: SystemStats,
     pub models: Vec<&'static str>,
-    pub endpoints: Vec<&'static str>,
+    pub endpoints: &'static [&'static str],
 }
 
 #[derive(Serialize)]

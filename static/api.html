@@ -267,7 +267,7 @@
           // 缓存校准结果
           calibrationCache.set(token, {
             user_id: result.user_id,
-            create_at: result.create_at,
+            time: result.time,
             checksum_time: result.checksum_time
           });
 
@@ -317,7 +317,7 @@
       // 添加用户基本信息
       if (tokenInfo.user || calibInfo) {
         const user = tokenInfo.user || {};
-        userDetails.innerHTML += `<p>用户ID: ${calibInfo ? calibInfo.user_id : user.id}</p><p>邮箱: ${user.email || ''}</p><p>用户名: ${user.name || ''}</p>${user.updated_at ? `<p>更新时间: ${new Date(user.updated_at).toLocaleString()}</p>` : ''}${calibInfo ? `<p>令牌创建时间: ${new Date(calibInfo.create_at).toLocaleString()}</p>` : ''}${calibInfo && calibInfo.checksum_time ? `<p>校验和时间区间: ${new Date(calibInfo.checksum_time * 1e6).toLocaleString()} - ${new Date((calibInfo.checksum_time + 1) * 1e6 - 1).toLocaleString()}</p>` : ''}`;
+        userDetails.innerHTML += `<p>用户ID: ${calibInfo ? calibInfo.user_id : user.id}</p><p>邮箱: ${user.email || ''}</p><p>用户名: ${user.name || ''}</p>${user.updated_at ? `<p>更新时间: ${new Date(user.updated_at).toLocaleString()}</p>` : ''}${calibInfo ? `<p>令牌创建时间: ${new Date(calibInfo.time.iat).toLocaleString()}</p>` : ''}${calibInfo ? `<p>令牌过期时间: ${new Date(calibInfo.time.exp).toLocaleString()}</p>` : ''}${calibInfo && calibInfo.checksum_time ? `<p>校验和时间区间: ${new Date(calibInfo.checksum_time * 1e6).toLocaleString()} - ${new Date((calibInfo.checksum_time + 1) * 1e6 - 1).toLocaleString()}</p>` : ''}`;
       }
 
       // 添加 Stripe 会员信息

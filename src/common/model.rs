@@ -1,23 +1,23 @@
+pub mod config;
 pub mod error;
 pub mod health;
-pub mod config;
 pub mod token;
+pub mod tri;
 pub mod userinfo;
+
+use std::borrow::Cow;
 
 use config::ConfigData;
 
 use serde::Serialize;
 
 #[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ApiStatus {
-    #[serde(rename = "healthy")]
     Healthy,
-    #[serde(rename = "success")]
     Success,
-    #[serde(rename = "error")]
     Error,
-    #[serde(rename = "failed")]
-    Failed,
+    Failure,
 }
 
 // #[derive(Serialize)]
@@ -40,7 +40,7 @@ pub struct NormalResponse<T> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
+    pub message: Option<Cow<'static, str>>,
 }
 
 impl std::fmt::Display for NormalResponse<ConfigData> {
@@ -65,8 +65,8 @@ pub struct ErrorResponse {
     pub code: Option<u16>,
     // HTTP 请求的错误码
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+    pub error: Option<Cow<'static, str>>,
     // 错误详情
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
+    pub message: Option<Cow<'static, str>>,
 }

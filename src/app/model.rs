@@ -1,359 +1,40 @@
+use std::{collections::HashMap, sync::LazyLock};
+
 use crate::{
-    app::constant::{
-        EMPTY_STRING, ERR_INVALID_PATH, ROUTE_ABOUT_PATH, ROUTE_API_PATH, ROUTE_BUILD_KEY_PATH,
-        ROUTE_CONFIG_PATH, ROUTE_LOGS_PATH, ROUTE_README_PATH, ROUTE_ROOT_PATH,
-        ROUTE_SHARED_JS_PATH, ROUTE_SHARED_STYLES_PATH, ROUTE_TOKENS_PATH,
-    },
-    chat::model::Message,
     common::{
-        client::rebuild_http_client,
-        model::{userinfo::TokenProfile, ApiStatus},
-        utils::{generate_checksum_with_repair, parse_bool_from_env, parse_string_from_env},
+        model::{ApiStatus, userinfo::TokenProfile},
+        utils::{TrimNewlines as _, generate_hash},
     },
+    core::model::Role,
 };
-use parking_lot::RwLock;
+use lasso::{LargeSpur, ThreadedRodeo};
+use proxy_pool::ProxyPool;
+use reqwest::Client;
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use serde::{Deserialize, Serialize};
-use std::sync::LazyLock;
 
 mod usage_check;
 pub use usage_check::UsageCheck;
+mod vision_ability;
+pub use vision_ability::VisionAbility;
 mod config;
-mod proxies;
-pub use proxies::Proxies;
+pub use config::AppConfig;
 mod build_key;
+pub mod proxy_pool;
 pub use build_key::*;
+mod state;
+pub use state::*;
+mod proxy;
+pub use proxy::*;
+mod log;
 
-use super::constant::{STATUS_FAILED, STATUS_PENDING, STATUS_SUCCESS};
+use super::constant::{EMPTY_STRING, STATUS_FAILURE, STATUS_PENDING, STATUS_SUCCESS};
 
-// 页面内容类型枚举
-#[derive(Clone, Serialize, Deserialize, Archive, RkyvDeserialize, RkyvSerialize)]
-#[serde(tag = "type", content = "content")]
-pub enum PageContent {
-    #[serde(rename = "default")]
-    Default, // 默认行为
-    #[serde(rename = "text")]
-    Text(String), // 纯文本
-    #[serde(rename = "html")]
-    Html(String), // HTML 内容
-}
-
-impl Default for PageContent {
-    fn default() -> Self {
-        Self::Default
-    }
-}
-
-// 静态配置
-#[derive(Default, Clone)]
-pub struct AppConfig {
-    vision_ability: VisionAbility,
-    slow_pool: bool,
-    allow_claude: bool,
-    pages: Pages,
-    usage_check: UsageCheck,
-    dynamic_key: bool,
-    share_token: String,
-    is_share: bool,
-    proxies: Proxies,
-    web_refs: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq)]
-pub enum VisionAbility {
-    #[serde(rename = "none", alias = "disabled")]
-    None,
-    #[serde(rename = "base64", alias = "base64-only")]
-    Base64,
-    #[serde(rename = "all", alias = "base64-http")]
-    All,
-}
-
-impl VisionAbility {
-    pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
-            "none" | "disabled" => Self::None,
-            "base64" | "base64-only" => Self::Base64,
-            "all" | "base64-http" => Self::All,
-            _ => Self::default(),
-        }
-    }
-
-    pub fn is_none(&self) -> bool {
-        matches!(self, VisionAbility::None)
-    }
-}
-
-impl Default for VisionAbility {
-    fn default() -> Self {
-        Self::Base64
-    }
-}
-
-#[derive(Clone, Default, Archive, RkyvDeserialize, RkyvSerialize)]
-pub struct Pages {
-    pub root_content: PageContent,
-    pub logs_content: PageContent,
-    pub config_content: PageContent,
-    pub tokeninfo_content: PageContent,
-    pub shared_styles_content: PageContent,
-    pub shared_js_content: PageContent,
-    pub about_content: PageContent,
-    pub readme_content: PageContent,
-    pub api_content: PageContent,
-    pub build_key_content: PageContent,
-}
-
-// 运行时状态
-pub struct AppState {
-    pub total_requests: u64,
-    pub active_requests: u64,
-    pub error_requests: u64,
-    pub request_logs: Vec<RequestLog>,
-    pub token_infos: Vec<TokenInfo>,
-}
-
-// 全局配置实例
-pub static APP_CONFIG: LazyLock<RwLock<AppConfig>> =
-    LazyLock::new(|| RwLock::new(AppConfig::default()));
-
-macro_rules! config_methods {
-    ($($field:ident: $type:ty, $default:expr;)*) => {
-        $(
-            paste::paste! {
-                pub fn [<get_ $field>]() -> $type
-                where
-                    $type: Copy + PartialEq,
-                {
-                    APP_CONFIG.read().$field
-                }
-
-                pub fn [<update_ $field>](value: $type)
-                where
-                    $type: Copy + PartialEq,
-                {
-                    let current = Self::[<get_ $field>]();
-                    if current != value {
-                        APP_CONFIG.write().$field = value;
-                    }
-                }
-
-                pub fn [<reset_ $field>]()
-                where
-                    $type: Copy + PartialEq,
-                {
-                    let default_value = $default;
-                    let current = Self::[<get_ $field>]();
-                    if current != default_value {
-                        APP_CONFIG.write().$field = default_value;
-                    }
-                }
-            }
-        )*
-    };
-}
-
-macro_rules! config_methods_clone {
-    ($($field:ident: $type:ty, $default:expr;)*) => {
-        $(
-            paste::paste! {
-                pub fn [<get_ $field>]() -> $type
-                where
-                    $type: Clone + PartialEq,
-                {
-                    APP_CONFIG.read().$field.clone()
-                }
-
-                pub fn [<update_ $field>](value: $type)
-                where
-                    $type: Clone + PartialEq,
-                {
-                    let current = Self::[<get_ $field>]();
-                    if current != value {
-                        APP_CONFIG.write().$field = value;
-                    }
-                }
-
-                pub fn [<reset_ $field>]()
-                where
-                    $type: Clone + PartialEq,
-                {
-                    let default_value = $default;
-                    let current = Self::[<get_ $field>]();
-                    if current != default_value {
-                        APP_CONFIG.write().$field = default_value;
-                    }
-                }
-            }
-        )*
-    };
-}
-
-impl AppConfig {
-    pub fn init() {
-        let mut config = APP_CONFIG.write();
-        config.vision_ability =
-            VisionAbility::from_str(&parse_string_from_env("VISION_ABILITY", EMPTY_STRING));
-        config.slow_pool = parse_bool_from_env("ENABLE_SLOW_POOL", false);
-        config.allow_claude = parse_bool_from_env("PASS_ANY_CLAUDE", false);
-        config.usage_check =
-            UsageCheck::from_str(&parse_string_from_env("USAGE_CHECK", EMPTY_STRING));
-        config.dynamic_key = parse_bool_from_env("DYNAMIC_KEY", false);
-        config.share_token = parse_string_from_env("SHARED_TOKEN", EMPTY_STRING);
-        config.is_share = !config.share_token.is_empty();
-        config.proxies = match std::env::var("PROXIES") {
-            Ok(proxies) => Proxies::from_str(proxies.as_str()),
-            Err(_) => Proxies::default(),
-        };
-        config.web_refs = parse_bool_from_env("INCLUDE_WEB_REFERENCES", false)
-    }
-
-    config_methods! {
-        slow_pool: bool, false;
-        allow_claude: bool, false;
-        dynamic_key: bool, false;
-        web_refs: bool, false;
-    }
-
-    config_methods_clone! {
-        vision_ability: VisionAbility, VisionAbility::default();
-        usage_check: UsageCheck, UsageCheck::default();
-    }
-
-    pub fn get_share_token() -> String {
-        APP_CONFIG.read().share_token.clone()
-    }
-
-    pub fn update_share_token(value: String) {
-        let current = Self::get_share_token();
-        if current != value {
-            let mut config = APP_CONFIG.write();
-            config.share_token = value;
-            config.is_share = !config.share_token.is_empty();
-        }
-    }
-
-    pub fn reset_share_token() {
-        let current = Self::get_share_token();
-        if !current.is_empty() {
-            let mut config = APP_CONFIG.write();
-            config.share_token = String::new();
-            config.is_share = false;
-        }
-    }
-
-    pub fn get_proxies() -> Proxies {
-        APP_CONFIG.read().proxies.clone()
-    }
-
-    pub fn update_proxies(value: Proxies) {
-        let current = Self::get_proxies();
-        if current != value {
-            let mut config = APP_CONFIG.write();
-            config.proxies = value;
-            rebuild_http_client();
-        }
-    }
-
-    pub fn reset_proxies() {
-        let default_value = Proxies::default();
-        let current = Self::get_proxies();
-        if current != default_value {
-            let mut config = APP_CONFIG.write();
-            config.proxies = default_value;
-            rebuild_http_client();
-        }
-    }
-
-    pub fn get_page_content(path: &str) -> Option<PageContent> {
-        match path {
-            ROUTE_ROOT_PATH => Some(APP_CONFIG.read().pages.root_content.clone()),
-            ROUTE_LOGS_PATH => Some(APP_CONFIG.read().pages.logs_content.clone()),
-            ROUTE_CONFIG_PATH => Some(APP_CONFIG.read().pages.config_content.clone()),
-            ROUTE_TOKENS_PATH => Some(APP_CONFIG.read().pages.tokeninfo_content.clone()),
-            ROUTE_SHARED_STYLES_PATH => Some(APP_CONFIG.read().pages.shared_styles_content.clone()),
-            ROUTE_SHARED_JS_PATH => Some(APP_CONFIG.read().pages.shared_js_content.clone()),
-            ROUTE_ABOUT_PATH => Some(APP_CONFIG.read().pages.about_content.clone()),
-            ROUTE_README_PATH => Some(APP_CONFIG.read().pages.readme_content.clone()),
-            ROUTE_API_PATH => Some(APP_CONFIG.read().pages.api_content.clone()),
-            ROUTE_BUILD_KEY_PATH => Some(APP_CONFIG.read().pages.build_key_content.clone()),
-            _ => None,
-        }
-    }
-
-    pub fn update_page_content(path: &str, content: PageContent) -> Result<(), &'static str> {
-        let mut config = APP_CONFIG.write();
-        match path {
-            ROUTE_ROOT_PATH => config.pages.root_content = content,
-            ROUTE_LOGS_PATH => config.pages.logs_content = content,
-            ROUTE_CONFIG_PATH => config.pages.config_content = content,
-            ROUTE_TOKENS_PATH => config.pages.tokeninfo_content = content,
-            ROUTE_SHARED_STYLES_PATH => config.pages.shared_styles_content = content,
-            ROUTE_SHARED_JS_PATH => config.pages.shared_js_content = content,
-            ROUTE_ABOUT_PATH => config.pages.about_content = content,
-            ROUTE_README_PATH => config.pages.readme_content = content,
-            ROUTE_API_PATH => config.pages.api_content = content,
-            ROUTE_BUILD_KEY_PATH => config.pages.build_key_content = content,
-            _ => return Err(ERR_INVALID_PATH),
-        }
-        Ok(())
-    }
-
-    pub fn reset_page_content(path: &str) -> Result<(), &'static str> {
-        let mut config = APP_CONFIG.write();
-        match path {
-            ROUTE_ROOT_PATH => config.pages.root_content = PageContent::default(),
-            ROUTE_LOGS_PATH => config.pages.logs_content = PageContent::default(),
-            ROUTE_CONFIG_PATH => config.pages.config_content = PageContent::default(),
-            ROUTE_TOKENS_PATH => config.pages.tokeninfo_content = PageContent::default(),
-            ROUTE_SHARED_STYLES_PATH => config.pages.shared_styles_content = PageContent::default(),
-            ROUTE_SHARED_JS_PATH => config.pages.shared_js_content = PageContent::default(),
-            ROUTE_ABOUT_PATH => config.pages.about_content = PageContent::default(),
-            ROUTE_README_PATH => config.pages.readme_content = PageContent::default(),
-            ROUTE_API_PATH => config.pages.api_content = PageContent::default(),
-            ROUTE_BUILD_KEY_PATH => config.pages.build_key_content = PageContent::default(),
-            _ => return Err(ERR_INVALID_PATH),
-        }
-        Ok(())
-    }
-
-    pub fn is_share() -> bool {
-        APP_CONFIG.read().is_share
-    }
-}
-
-impl AppState {
-    pub fn new(token_infos: Vec<TokenInfo>) -> Self {
-        // 尝试加载保存的日志
-        let request_logs = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(async { Self::load_saved_logs().await.unwrap_or_default() })
-        });
-
-        Self {
-            total_requests: request_logs.len() as u64,
-            active_requests: 0,
-            error_requests: request_logs
-                .iter()
-                .filter(|log| matches!(log.status, LogStatus::Failed))
-                .count() as u64,
-            request_logs,
-            token_infos,
-        }
-    }
-
-    pub fn update_checksum(&mut self) {
-        for token_info in self.token_infos.iter_mut() {
-            token_info.checksum = generate_checksum_with_repair(&token_info.checksum);
-        }
-    }
-}
-
-#[derive(Clone, Archive, RkyvDeserialize, RkyvSerialize)]
+#[derive(Clone, Copy, PartialEq, Archive, RkyvDeserialize, RkyvSerialize)]
 pub enum LogStatus {
     Pending,
     Success,
-    Failed,
+    Failure,
 }
 
 impl Serialize for LogStatus {
@@ -370,7 +51,7 @@ impl LogStatus {
         match self {
             Self::Pending => STATUS_PENDING,
             Self::Success => STATUS_SUCCESS,
-            Self::Failed => STATUS_FAILED,
+            Self::Failure => STATUS_FAILURE,
         }
     }
 
@@ -378,57 +59,315 @@ impl LogStatus {
         match s {
             STATUS_PENDING => Some(Self::Pending),
             STATUS_SUCCESS => Some(Self::Success),
-            STATUS_FAILED => Some(Self::Failed),
+            STATUS_FAILURE => Some(Self::Failure),
             _ => None,
         }
     }
 }
 
 // 请求日志
-#[derive(Serialize, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
+#[derive(Serialize, Clone)]
 pub struct RequestLog {
     pub id: u64,
     pub timestamp: chrono::DateTime<chrono::Local>,
-    pub model: String,
+    pub model: &'static str,
     pub token_info: TokenInfo,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt: Option<String>,
+    pub chain: Option<Chain>,
     pub timing: TimingInfo,
     pub stream: bool,
     pub status: LogStatus,
+    pub error: ErrorInfo,
+}
+
+#[derive(Serialize, Clone)]
+pub struct Chain {
+    #[serde(skip_serializing_if = "Prompt::is_none")]
+    pub prompt: Prompt,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+    pub delays: Option<(String, Vec<(u32, f32)>)>,
+    #[serde(skip_serializing_if = "OptionUsage::is_none")]
+    pub usage: OptionUsage,
 }
 
 #[derive(Serialize, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
-pub struct TimingInfo {
-    pub total: f64, // 总用时(秒)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub first: Option<f64>, // 首字时间(秒)
+pub enum OptionUsage {
+    None,
+    Uasge { input: i32, output: i32 },
 }
 
-// 聊天请求
-#[derive(Deserialize)]
-pub struct ChatRequest {
-    pub model: String,
-    pub messages: Vec<Message>,
-    #[serde(default)]
-    pub stream: bool,
+impl OptionUsage {
+    #[inline(always)]
+    pub const fn is_none(&self) -> bool {
+        matches!(*self, Self::None)
+    }
+}
+
+#[derive(Serialize, Clone)]
+#[serde(untagged)]
+pub enum Prompt {
+    None,
+    Origin(String),
+    Parsed(Vec<PromptMessage>),
+}
+
+#[derive(Serialize, Clone)]
+pub struct PromptMessage {
+    role: Role,
+    content: PromptContent,
+}
+
+static RODEO: LazyLock<ThreadedRodeo<LargeSpur>> = LazyLock::new(ThreadedRodeo::new);
+
+#[derive(Debug, Clone)]
+pub enum PromptContent {
+    Leaked(&'static str),
+    Shared(LargeSpur),
+}
+
+impl Serialize for PromptContent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Self::Leaked(s) => serializer.serialize_str(s),
+            Self::Shared(key) => serializer.serialize_str(RODEO.resolve(key)),
+        }
+    }
+}
+
+impl PromptContent {
+    pub fn into_owned(self) -> String {
+        match self {
+            Self::Leaked(s) => s.to_string(),
+            Self::Shared(key) => RODEO.resolve(&key).to_string(),
+        }
+    }
+}
+
+impl Prompt {
+    pub fn new(input: String) -> Self {
+        let mut messages = Vec::new();
+        let mut remaining = input.as_str();
+
+        while !remaining.is_empty() {
+            // 检查是否以任一开始标记开头
+            let (role, start_tag) = if remaining.starts_with("<|BEGIN_SYSTEM|>\n") {
+                (Role::System, "<|BEGIN_SYSTEM|>\n")
+            } else if remaining.starts_with("<|BEGIN_USER|>\n") {
+                (Role::User, "<|BEGIN_USER|>\n")
+            } else if remaining.starts_with("<|BEGIN_ASSISTANT|>\n") {
+                (Role::Assistant, "<|BEGIN_ASSISTANT|>\n")
+            } else {
+                return Self::Origin(input);
+            };
+
+            // 确定相应的结束标记
+            let end_tag = match role {
+                Role::System => "\n<|END_SYSTEM|>\n",
+                Role::User => "\n<|END_USER|>\n",
+                Role::Assistant => "\n<|END_ASSISTANT|>\n",
+            };
+
+            // 移除起始标记
+            remaining = &remaining[start_tag.len()..];
+
+            // 查找结束标记
+            if let Some(end_index) = remaining.find(end_tag) {
+                // 提取内容
+                let content = if role == Role::System {
+                    PromptContent::Leaked(crate::leak::intern_string(&remaining[..end_index]))
+                } else {
+                    PromptContent::Shared(
+                        RODEO.get_or_intern(remaining[..end_index].trim_leading_newlines()),
+                    )
+                };
+                messages.push(PromptMessage { role, content });
+
+                // 移除当前消息（包括结束标记）
+                remaining = &remaining[end_index + end_tag.len()..];
+
+                // 如果消息之间有额外的换行符，将其跳过
+                if remaining.as_bytes().first().copied() == Some(b'\n') {
+                    remaining = &remaining[1..];
+                }
+            } else {
+                return Self::Origin(input);
+            }
+        }
+
+        Self::Parsed(messages)
+    }
+
+    #[inline(always)]
+    pub const fn is_none(&self) -> bool {
+        matches!(*self, Self::None)
+    }
+
+    #[inline(always)]
+    pub const fn is_some(&self) -> bool {
+        !self.is_none()
+    }
+}
+
+#[derive(Serialize, Clone, Copy, Archive, RkyvDeserialize, RkyvSerialize)]
+pub struct TimingInfo {
+    pub total: f64, // 总用时(秒)
+}
+
+#[derive(Serialize, Clone, Copy)]
+#[serde(untagged)]
+pub enum ErrorInfo {
+    None,
+    Error(&'static str),
+    Details {
+        error: &'static str,
+        details: &'static str,
+    },
+}
+
+impl ErrorInfo {
+    #[inline]
+    pub fn new(e: &str) -> Self {
+        Self::Error(crate::leak::intern_string(e))
+    }
+
+    #[inline]
+    pub fn new_details(e: &str, detail: &str) -> Self {
+        Self::Details {
+            error: crate::leak::intern_string(e),
+            details: crate::leak::intern_string(detail),
+        }
+    }
+
+    #[inline]
+    pub fn add_detail(&mut self, detail: &str) {
+        match self {
+            ErrorInfo::None => {
+                *self = Self::Details {
+                    error: crate::leak::intern_string(EMPTY_STRING),
+                    details: crate::leak::intern_string(detail),
+                }
+            }
+            ErrorInfo::Error(error) => {
+                *self = Self::Details {
+                    error,
+                    details: crate::leak::intern_string(detail),
+                }
+            }
+            ErrorInfo::Details { details, .. } => {
+                *details = crate::leak::intern_string(detail);
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub const fn is_none(&self) -> bool {
+        matches!(*self, Self::None)
+    }
+
+    #[inline(always)]
+    pub const fn is_some(&self) -> bool {
+        !self.is_none()
+    }
 }
 
 // 用于存储 token 信息
-#[derive(Serialize, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
+#[derive(Clone, Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize)]
 pub struct TokenInfo {
     pub token: String,
     pub checksum: String,
+    #[serde(default)]
+    pub status: TokenStatus,
+    #[serde(skip_serializing, default = "generate_client_key")]
+    pub client_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub profile: Option<TokenProfile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<HashMap<String, Option<String>>>,
+}
+
+#[derive(Default, Clone, Copy, Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize)]
+#[serde(rename_all = "lowercase")]
+#[repr(u8)]
+pub enum TokenStatus {
+    #[default]
+    Enabled,
+    Disabled,
+}
+
+impl TokenInfo {
+    #[inline(always)]
+    pub fn is_enabled(&self) -> bool {
+        matches!(self.status, TokenStatus::Enabled)
+    }
+}
+
+#[inline(always)]
+fn generate_client_key() -> Option<String> {
+    Some(generate_hash())
+}
+
+impl TokenInfo {
+    /// 获取适用于此 token 的 HTTP 客户端
+    ///
+    /// 如果 tags 中包含 "proxy" 键值对对象，会使用其值作为代理 URL
+    /// 例如: tags = ["a", {"proxy": "http://localhost:8080"}, "d"] 将使用 http://localhost:8080 作为代理
+    ///
+    /// 如果没有找到有效的代理配置，将返回默认客户端
+    pub fn get_client(&self) -> Client {
+        if let Some(tags) = &self.tags {
+            ProxyPool::get_client_or_general(
+                tags.get("proxy")
+                    .and_then(|v| v.as_ref().map(String::as_str)),
+            )
+        } else {
+            ProxyPool::get_general_client()
+        }
+    }
+
+    /// 获取此 token 关联的时区
+    ///
+    /// 如果 tags 中包含 "timezone" 键值对对象，会尝试使用其值作为时区标识
+    /// 例如: tags = ["a", {"timezone": "Asia/Shanghai"}, "d"] 将使用上海时区
+    /// 如果无法解析时区或未设置，将返回系统默认时区
+    #[inline]
+    fn get_timezone(&self) -> chrono_tz::Tz {
+        use std::str::FromStr as _;
+        if let Some(tags) = self.tags.as_ref() {
+            if let Some(Some(tz_str)) = tags.get("timezone") {
+                if let Ok(tz) = chrono_tz::Tz::from_str(tz_str) {
+                    return tz;
+                }
+            }
+        }
+        *super::lazy::GENERAL_TIMEZONE
+    }
+
+    /// 返回关联的时区名称
+    pub fn timezone_name(&self) -> &'static str {
+        self.get_timezone().name()
+    }
+
+    /// 获取当前时区的当前时间
+    pub fn now(&self) -> chrono::DateTime<chrono_tz::Tz> {
+        use chrono::TimeZone as _;
+        self.get_timezone()
+            .from_utc_datetime(&chrono::Utc::now().naive_utc())
+    }
 }
 
 // TokenUpdateRequest 结构体
+pub type TokenUpdateRequest = Vec<TokenInfo>;
+
 #[derive(Deserialize)]
-pub struct TokenUpdateRequest {
-    pub tokens: String,
+pub struct TokenAddRequest {
+    pub tokens: Vec<TokenAddRequestTokenInfo>,
+    #[serde(default)]
+    pub tags: Option<HashMap<String, Option<String>>>,
+    #[serde(default)]
+    pub status: TokenStatus,
 }
 
 #[derive(Deserialize)]
@@ -444,12 +383,12 @@ pub struct TokensDeleteRequest {
     #[serde(default)]
     pub tokens: Vec<String>,
     #[serde(default)]
-    pub expectation: TokensDeleteResponseExpectation,
+    pub expectation: DeleteResponseExpectation,
 }
 
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum TokensDeleteResponseExpectation {
+pub enum DeleteResponseExpectation {
     #[default]
     Simple,
     UpdatedTokens,
@@ -457,20 +396,18 @@ pub enum TokensDeleteResponseExpectation {
     Detailed,
 }
 
-impl TokensDeleteResponseExpectation {
+impl DeleteResponseExpectation {
     pub fn needs_updated_tokens(&self) -> bool {
         matches!(
             self,
-            TokensDeleteResponseExpectation::UpdatedTokens
-                | TokensDeleteResponseExpectation::Detailed
+            DeleteResponseExpectation::UpdatedTokens | DeleteResponseExpectation::Detailed
         )
     }
 
     pub fn needs_failed_tokens(&self) -> bool {
         matches!(
             self,
-            TokensDeleteResponseExpectation::FailedTokens
-                | TokensDeleteResponseExpectation::Detailed
+            DeleteResponseExpectation::FailedTokens | DeleteResponseExpectation::Detailed
         )
     }
 }
@@ -483,4 +420,33 @@ pub struct TokensDeleteResponse {
     pub updated_tokens: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub failed_tokens: Option<Vec<String>>,
+}
+
+#[derive(Serialize)]
+pub struct TokenInfoResponse {
+    pub status: ApiStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tokens: Option<Vec<TokenInfo>>,
+    pub tokens_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+// 标签相关的请求/响应结构体
+#[derive(Deserialize)]
+pub struct TokenTagsUpdateRequest {
+    pub tokens: Vec<String>,
+    pub tags: Option<HashMap<String, Option<String>>>,
+}
+
+#[derive(Serialize)]
+pub struct CommonResponse {
+    pub status: ApiStatus,
+    pub message: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct TokenStatusSetRequest {
+    pub tokens: Vec<String>,
+    pub status: TokenStatus,
 }

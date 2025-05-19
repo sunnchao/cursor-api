@@ -1,10 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{app::constant::COMMA, chat::constant::AVAILABLE_MODELS};
+use crate::{app::constant::COMMA, core::constant::Models};
 
 #[derive(Deserialize)]
 pub struct BuildKeyRequest {
     pub auth_token: String,
+    #[serde(default)]
+    pub proxy_name: Option<String>,
     #[serde(default)]
     pub disable_vision: Option<bool>,
     #[serde(default)]
@@ -14,6 +16,7 @@ pub struct BuildKeyRequest {
     #[serde(default)]
     pub include_web_references: Option<bool>,
 }
+
 pub struct UsageCheckModelConfig {
     pub model_type: UsageCheckModelType,
     pub model_ids: Vec<&'static str>,
@@ -42,10 +45,7 @@ impl<'de> Deserialize<'de> for UsageCheckModelConfig {
                 .split(COMMA)
                 .filter_map(|model| {
                     let model = model.trim();
-                    AVAILABLE_MODELS
-                        .iter()
-                        .find(|m| m.id == model)
-                        .map(|m| m.id)
+                    Models::find_id(model).map(|m| m.id)
                 })
                 .collect()
         };
@@ -70,5 +70,5 @@ pub enum UsageCheckModelType {
 #[serde(rename_all = "lowercase")]
 pub enum BuildKeyResponse {
     Key(String),
-    Error(String),
+    Error(&'static str),
 }

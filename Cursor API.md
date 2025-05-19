@@ -112,9 +112,9 @@ token2,checksum2
 | 端点 | 方法 | 功能 |
 |------|------|-----|
 | `/tokens` | GET | Token 信息管理界面 |
-| `/tokens/update` | POST | 批量更新 Token 列表 |
+| `/tokens/set` | POST | 批量更新 Token 列表 |
 | `/tokens/add` | POST | 增量添加 Token |
-| `/tokens/delete` | POST | 删除指定 Token |
+| `/tokens/del` | POST | 删除指定 Token |
 
 ```mermaid
 sequenceDiagram
