@@ -16,9 +16,9 @@ pub struct RedisConfig {
 impl Default for RedisConfig {
     fn default() -> Self {
         Self {
-            host: "redis-8e090d6-chaowang-c39a.h.aivencloud.com".to_string(),
-            port: 20346,
-            password: Some("AVNS_dvyneqowB90t4acNcz0".to_string()),
+            host: "127.0.0.1".to_string(),
+            port: 3306,
+            password: Some("".to_string()),
             db: 0,
             pool_size: 10,
             timeout: 5,
