@@ -53,6 +53,10 @@ def_pub_const!(
     CLAUDE_3_7_SONNET_THINKING => "claude-3.7-sonnet-thinking",
     CLAUDE_3_7_SONNET_MAX => "claude-3.7-sonnet-max",
     CLAUDE_3_7_SONNET_THINKING_MAX => "claude-3.7-sonnet-thinking-max",
+    CLAUDE_4_OPUS => "claude-4-opus",
+    CLAUDE_4_OPUS_THINKING => "claude-4-opus-thinking",
+    CLAUDE_4_SONNET => "claude-4-sonnet",
+    CLAUDE_4_SONNET_THINKING => "claude-4-sonnet-thinking",
 
     // OpenAI 模型
     GPT_4 => "gpt-4",
@@ -79,6 +83,8 @@ def_pub_const!(
     GEMINI_2_5_PRO_MAX => "gemini-2.5-pro-max",
     GEMINI_2_0_FLASH_THINKING_EXP => "gemini-2.0-flash-thinking-exp",
     GEMINI_2_0_FLASH => "gemini-2.0-flash",
+    GEMINI_2_5_FLASH_PREVIEW_05_20 => "gemini-2.5-flash-preview-05-20",
+    GEMINI_2_5_FLASH_PREVIEW_04_17 => "gemini-2.5-flash-preview-04-17",
 
     // Deepseek 模型
     DEEPSEEK_V3 => "deepseek-v3",
@@ -203,6 +209,10 @@ create_models!(
     CLAUDE_3_7_SONNET_THINKING => ANTHROPIC,
     CLAUDE_3_7_SONNET_MAX => ANTHROPIC,
     CLAUDE_3_7_SONNET_THINKING_MAX => ANTHROPIC,
+    CLAUDE_4_OPUS => ANTHROPIC,
+    CLAUDE_4_OPUS_THINKING => ANTHROPIC,
+    CLAUDE_4_SONNET => ANTHROPIC,
+    CLAUDE_4_SONNET_THINKING => ANTHROPIC,
     GPT_4 => OPENAI,
     GPT_4O => OPENAI,
     GPT_4_5_PREVIEW => OPENAI,
@@ -233,6 +243,8 @@ create_models!(
     GROK_3_BETA => XAI,
     GROK_3_MINI_BETA => XAI,
     GPT_4_1 => OPENAI,
+    GEMINI_2_5_FLASH_PREVIEW_05_20 => GOOGLE,
+    GEMINI_2_5_FLASH_PREVIEW_04_17 => GOOGLE,
 );
 
 pub const FREE_MODELS: [&str; 8] = [
@@ -264,6 +276,8 @@ const SUPPORTED_THINKING_MODELS: [&str; 10] = [
     GEMINI_2_0_FLASH_THINKING_EXP,
     DEEPSEEK_R1,
     O3_MINI,
+    CLAUDE_4_OPUS_THINKING,
+    CLAUDE_4_SONNET_THINKING,
 ];
 
 const SUPPORTED_IMAGE_MODELS: [&str; 19] = [
@@ -273,6 +287,10 @@ const SUPPORTED_IMAGE_MODELS: [&str; 19] = [
     CLAUDE_3_7_SONNET_THINKING,
     CLAUDE_3_7_SONNET_MAX,
     CLAUDE_3_7_SONNET_THINKING_MAX,
+    CLAUDE_4_OPUS,
+    CLAUDE_4_OPUS_THINKING,
+    CLAUDE_4_SONNET,
+    CLAUDE_4_SONNET_THINKING,
     GPT_4,
     GPT_4O,
     GPT_4_5_PREVIEW,
