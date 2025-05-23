@@ -17,8 +17,8 @@ impl Default for RedisConfig {
     fn default() -> Self {
         Self {
             host: "127.0.0.1".to_string(),
-            port: 3306,
-            password: Some("".to_string()),
+            port: 6379,
+            password: None,
             db: 0,
             pool_size: 10,
             timeout: 5,
